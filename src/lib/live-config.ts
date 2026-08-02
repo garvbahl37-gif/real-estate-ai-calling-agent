@@ -82,6 +82,16 @@ export interface LiveConfigOptions extends PromptOptions {
 export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig {
   const { voice = DEFAULT_VOICE, resumeHandle, channel = "browser", affectiveDialog = false, ...promptOpts } = opts;
 
+  // Order matters, and it is not cosmetic. The first entry is the ASR's primary
+  // hypothesis, so with hi-IN leading it renders English speech in Devanagari —
+  // "sorry, I would like to change my budget" comes back as
+  // "सॉरी, आई वुड लाइक टू चेंज माय बजट". The words are right and the script is
+  // wrong, which looks like the agent switched language when she did not.
+  //
+  // Both languages stay listed either way, so a caller who switches mid-call is
+  // still transcribed correctly; only the default hypothesis moves.
+  const languageCodes = promptOpts.openingLanguage === "english" ? ["en-IN", "hi-IN"] : ["hi-IN", "en-IN"];
+
   return {
     responseModalities: [Modality.AUDIO],
     systemInstruction: buildSystemInstruction(promptOpts),
@@ -97,12 +107,12 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
     // invented a full Devanagari sentence out of near-silence. Pinning the
     // languages removes the guesswork.
     inputAudioTranscription: {
-      languageCodes: ["hi-IN", "en-IN"],
+      languageCodes,
       // Sector numbers, configurations and Indian money units are exactly what
       // a general ASR mangles, and exactly what has to be right on a sales call.
       customVocabulary: SPEECH_VOCABULARY,
     },
-    outputAudioTranscription: { languageCodes: ["hi-IN", "en-IN"] },
+    outputAudioTranscription: { languageCodes },
 
     tools: [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }],
 
