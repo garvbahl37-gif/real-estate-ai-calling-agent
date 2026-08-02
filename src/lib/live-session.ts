@@ -2,6 +2,7 @@
 
 import { GoogleGenAI, type LiveServerMessage, type Session } from "@google/genai";
 import { executeAgentTool, mergeRequirements } from "./agent-tools";
+import { CallRecorder } from "./call-recorder";
 import { INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE, arrayBufferToBase64, base64ToFloat32 } from "./audio-utils";
 import type { LeadRequirements, ToolInvocation, TranscriptTurn } from "./types";
 
@@ -133,6 +134,8 @@ export class LiveCall {
   private agentLevel = 0;
   private noiseFloor = ABSOLUTE_NOISE_FLOOR;
   private gateOpenUntil = 0;
+  /** Records both sides so the demo does not depend on OS audio routing. */
+  private recorder = new CallRecorder();
   private levelRaf?: number;
   private endCallTimer?: ReturnType<typeof setTimeout>;
 
@@ -175,6 +178,18 @@ export class LiveCall {
     return this.startedAt ? Date.now() - this.startedAt : 0;
   }
 
+  /**
+   * The finished call as a stereo WAV — caller left, agent right. Available
+   * once the call ends; null if nothing was captured.
+   */
+  getRecording(): Blob | null {
+    return this.recorder.toWavBlob();
+  }
+
+  get recordedSeconds() {
+    return this.recorder.durationSec;
+  }
+
   async start(options: LiveCallOptions = {}) {
     if (this.state !== "idle" && this.state !== "ended" && this.state !== "error") return;
     this.closed = false;
@@ -192,7 +207,9 @@ export class LiveCall {
       // Microphone first. If permission is denied we want to fail before
       // opening a socket, otherwise the agent greets an empty room.
       await this.setupAudio();
-      this.log("Mic capturing at 16 kHz · playback ready at 24 kHz");
+      this.recorder.reset();
+      this.recorder.start();
+      this.log("Mic capturing at 16 kHz · playback ready at 24 kHz · recording both sides");
 
       await this.connect();
       this.startLevelPump();
@@ -407,6 +424,9 @@ export class LiveCall {
       const data = e.data;
       if (data.type === "pcm") {
         if (!this.session || this.closed) return;
+        // Recorded before gating: the gate exists to stop the *model*
+        // hallucinating on room tone, not to censor the recording.
+        this.recorder.pushMic(new Int16Array(data.buffer as ArrayBuffer));
         if (!this.passesNoiseGate(data.rms as number)) return;
         try {
           this.session.sendRealtimeInput({
@@ -485,6 +505,7 @@ export class LiveCall {
     // Barge-in: the caller started talking over the agent.
     if (sc.interrupted) {
       this.playerNode?.port.postMessage({ type: "flush" });
+      this.recorder.discardUnplayedAgent();
       this.finalizeAgentTurn();
       this.setState("listening");
       this.log("↩ Caller interrupted — playback flushed.");
@@ -494,6 +515,8 @@ export class LiveCall {
       const inline = part.inlineData;
       if (inline?.data && inline.mimeType?.startsWith("audio/")) {
         const pcm = base64ToFloat32(inline.data);
+        this.recorder.pushAgent(pcm);
+        // The worklet takes ownership of the buffer, so record before transfer.
         this.playerNode?.port.postMessage({ type: "chunk", buffer: pcm.buffer }, [pcm.buffer]);
       }
       if (part.text) this.appendAgentText(part.text);
@@ -703,6 +726,7 @@ export class LiveCall {
    * immediately, not silence eventually.
    */
   private stopAudioNow() {
+    this.recorder.stop();
     if (this.levelRaf) cancelAnimationFrame(this.levelRaf);
     this.levelRaf = undefined;
     if (this.endCallTimer) clearTimeout(this.endCallTimer);

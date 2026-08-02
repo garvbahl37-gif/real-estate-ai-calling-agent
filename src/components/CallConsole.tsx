@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LeadPanel } from "@/components/LeadPanel";
 import { Shirorekha } from "@/components/Shirorekha";
-import { Teleprompter } from "@/components/Teleprompter";
 import { Transcript } from "@/components/Transcript";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
 import { DEFAULT_LIVE_MODEL, LIVE_MODELS } from "@/lib/models";
@@ -53,7 +52,7 @@ export function CallConsole() {
   const [log, setLog] = useState<string[]>([]);
   const [muted, setMuted] = useState(false);
   const [typed, setTyped] = useState("");
-  const [prompter, setPrompter] = useState(false);
+  const [recordingUrl, setRecordingUrl] = useState<string | null>(null);
 
   const [summary, setSummary] = useState<CallSummary | null>(null);
   const [summarising, setSummarising] = useState(false);
@@ -146,6 +145,10 @@ export function CallConsole() {
     setToolCalls([]);
     setLog([]);
     setElapsed(0);
+    setRecordingUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
     startedAtRef.current = Date.now();
 
     // Register the call before connecting so a crash mid-call still leaves a
@@ -177,6 +180,8 @@ export function CallConsole() {
       onError: setError,
       onLog: (line) => setLog((prev) => [...prev.slice(-40), line]),
       onEnded: () => {
+        const wav = call.getRecording();
+        if (wav) setRecordingUrl(URL.createObjectURL(wav));
         void finaliseCall(newCallId);
       },
     });
@@ -200,6 +205,12 @@ export function CallConsole() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (recordingUrl) URL.revokeObjectURL(recordingUrl);
+    };
+  }, [recordingUrl]);
+
   const toggleMute = () => {
     const next = !muted;
     setMuted(next);
@@ -213,7 +224,7 @@ export function CallConsole() {
   const showResult = (state === "ended" || state === "error") && turns.length > 0;
 
   return (
-    <div className={cn("mx-auto w-full max-w-[1400px] px-5 sm:px-8", prompter && "pb-64")}>
+    <div className="mx-auto w-full max-w-[1400px] px-5 sm:px-8">
       {/* --- Live rule: the signature element ------------------------- */}
       <div className="pt-6">
         <Shirorekha levelsRef={levelsRef} active={active} height={64} />
@@ -239,16 +250,6 @@ export function CallConsole() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => setPrompter((v) => !v)}
-            aria-pressed={prompter}
-            className={cn(
-              "border-rule hover:border-ink min-h-11 rounded-sm border px-3 font-mono text-[11px] font-semibold tracking-wide uppercase transition-colors",
-              prompter ? "bg-ink text-paper border-ink" : "text-ink-2",
-            )}
-          >
-            Teleprompter
-          </button>
           {active ? (
             <>
               <button
@@ -491,6 +492,15 @@ export function CallConsole() {
                 >
                   Start a fresh call
                 </button>
+                {recordingUrl ? (
+                  <a
+                    href={recordingUrl}
+                    download={`priya-call-${callId ?? "recording"}.wav`}
+                    className="border-aqua text-aqua hover:bg-aqua hover:text-paper rounded-sm border px-5 py-2.5 text-[13px] font-semibold transition-colors"
+                  >
+                    Download recording (.wav)
+                  </a>
+                ) : null}
                 {callId ? (
                   <Link
                     href={`/leads/${callId}`}
@@ -592,8 +602,6 @@ export function CallConsole() {
           )}
         </div>
       ) : null}
-
-      {prompter ? <Teleprompter onClose={() => setPrompter(false)} /> : null}
 
       {/* --- Connection log ------------------------------------------ */}
       {log.length > 0 && !showSetup ? (

@@ -178,11 +178,20 @@ No database needed — it falls back to an in-memory store. Set `DATABASE_URL` f
 
 ### Recording the demo
 
-The call page has a **Teleprompter** button. It docks a lower-third bar to the bottom of the screen
-with a 12-beat script — what to say (Devanagari plus transliteration), which evaluation criterion the
-line demonstrates, and what to point at on screen as it happens. Space or → advances, ← goes back,
-Esc closes. It sits below the transcript and lead panel on purpose, so a screen recording still shows
-both filling in.
+When a call ends the console offers **Download recording (.wav)** — the whole conversation as a
+stereo WAV, caller on the left channel and the agent on the right.
+
+This exists because screen-recording a browser voice agent is unreasonably fiddly. On headphones the
+agent's voice goes into your ears and never reaches the microphone, so the recording captures only
+your half. On speakers you get echo, and the agent starts interrupting itself. macOS can capture
+system audio but only through a toggle that is easy to miss, and a stock machine has no loopback
+device. Since both streams already pass through the client as raw PCM, the app just records itself:
+mic audio is positioned by wall clock (the noise gate drops silent chunks, so appending would slide
+the two sides apart), and agent audio is written contiguously because it arrives faster than real
+time and is played out at real time.
+
+A separate demo script lives in [`demo/SCRIPT.md`](demo/SCRIPT.md) — read it from a phone or a second
+window so the recording shows a clean app.
 
 ```bash
 pnpm test        # 40 unit tests
