@@ -32,12 +32,20 @@ export interface TwilioAuth {
   apiKeySecret?: string;
 }
 
+/**
+ * Auth Token takes precedence over an API key when both are present.
+ *
+ * That order is deliberate: an API key may be Restricted, and a restricted key
+ * fails account-management calls with 20003 rather than falling back. If
+ * someone has supplied the Auth Token they want the credential that can
+ * actually do everything.
+ */
 export function twilioClient(auth: TwilioAuth) {
+  if (auth.authToken) return twilio(auth.accountSid, auth.authToken);
   if (auth.apiKeySid && auth.apiKeySecret) {
     return twilio(auth.apiKeySid, auth.apiKeySecret, { accountSid: auth.accountSid });
   }
-  if (!auth.authToken) throw new Error("Provide TWILIO_AUTH_TOKEN, or TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET.");
-  return twilio(auth.accountSid, auth.authToken);
+  throw new Error("Provide TWILIO_AUTH_TOKEN, or TWILIO_API_KEY_SID + TWILIO_API_KEY_SECRET.");
 }
 
 export interface PlaceCallOptions extends TwilioAuth {
