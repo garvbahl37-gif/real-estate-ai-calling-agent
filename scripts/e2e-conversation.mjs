@@ -80,9 +80,15 @@ console.log(leadBefore.length ? leadBefore.join("\n") : "(nothing captured — F
 console.log(`\n=== TOOL CALLS: ${toolCount} ===`);
 console.log(toolNames.join(", ") || "(none — FAIL)");
 
-// Hang up and let the summary generate.
-await page.getByRole("button", { name: /end the call/i }).click();
-console.log("\n→ ended call, generating summary…");
+// The agent often hangs up on its own via end_call once a site visit is
+// booked — that is the desired behaviour, so only click End if it is still up.
+const endBtn = page.getByRole("button", { name: /end the call/i });
+if (await endBtn.count()) {
+  await endBtn.click().catch(() => {});
+  console.log("\n→ hung up manually, generating summary…");
+} else {
+  console.log("\n→ agent ended the call itself (end_call), generating summary…");
+}
 await page
   .waitForFunction(() => /Qualification/i.test(document.body.innerText) && /\b(hot|warm|cold)\b/i.test(document.body.innerText), null, { timeout: 60000 })
   .catch(() => console.log("  (summary did not render in time)"));
