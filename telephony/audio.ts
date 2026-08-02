@@ -22,7 +22,7 @@ for (let i = 1; i < 256; i++) EXP_LUT[i] = Math.min(7, 31 - Math.clz32(i));
 
 /** One 16-bit signed sample → one μ-law byte. */
 export function pcmToMuLawSample(sample: number): number {
-  let sign = (sample >> 8) & 0x80;
+  const sign = (sample >> 8) & 0x80;
   if (sign) sample = -sample;
   if (sample > CLIP) sample = CLIP;
   sample += BIAS;

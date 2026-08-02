@@ -129,7 +129,7 @@ export default async function LeadsPage() {
                   return (
                     <tr key={c.id} className="border-rule-2 hover:bg-paper-2 border-b transition-colors">
                       <td className="py-3 pr-4 align-top">
-                        <Link href={`/leads/${c.id}`} className="text-ink text-[14px] font-semibold hover:underline">
+                        <Link href={`/leads/${c.id}`} className="text-ink inline-flex min-h-9 items-center text-[14px] font-semibold hover:underline">
                           {req.name || "Unidentified caller"}
                         </Link>
                         <div className="text-ink-3 mt-0.5 font-mono text-[11px]">{req.phone || c.fromNumber || "no number"}</div>
@@ -162,7 +162,7 @@ export default async function LeadsPage() {
                       <td className="text-ink-3 py-3 pr-4 align-top text-[12px] whitespace-nowrap">{when(c.startedAt)}</td>
                       <td className="text-ink-3 tnum py-3 pr-4 align-top font-mono text-[12px]">{duration(c.durationSec)}</td>
                       <td className="py-3 align-top">
-                        <Link href={`/leads/${c.id}`} className="text-aqua text-[12px] font-semibold hover:underline">
+                        <Link href={`/leads/${c.id}`} className="text-aqua flex min-h-11 items-center text-[12px] font-semibold hover:underline">
                           Open
                         </Link>
                       </td>

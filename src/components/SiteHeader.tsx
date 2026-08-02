@@ -12,7 +12,7 @@ export function SiteHeader({ current }: { current?: string }) {
   return (
     <header className="border-b border-rule bg-paper/85 sticky top-0 z-40 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-[1400px] items-center gap-8 px-5 sm:px-8">
-        <Link href="/" className="group flex items-baseline gap-2.5">
+        <Link href="/" className="group flex min-h-11 items-center gap-2.5">
           <span className="font-display text-ink text-[19px] leading-none">आरंभ</span>
           <span className="text-ink-2 group-hover:text-aqua text-[13px] font-medium tracking-tight transition-colors">
             Aarambh Realty
@@ -25,7 +25,7 @@ export function SiteHeader({ current }: { current?: string }) {
               key={item.href}
               href={item.href}
               className={cn(
-                "rounded-sm px-3 py-1.5 text-[13px] font-medium transition-colors",
+                "flex min-h-11 items-center rounded-sm px-3 text-[13px] font-medium transition-colors",
                 current === item.href ? "text-ink bg-paper-2" : "text-ink-3 hover:text-ink hover:bg-paper-2",
               )}
             >
@@ -38,7 +38,7 @@ export function SiteHeader({ current }: { current?: string }) {
         {current !== "/call" ? (
           <Link
             href="/call"
-            className="bg-ink text-paper hover:bg-aqua ml-auto rounded-sm px-3.5 py-2 text-[13px] font-semibold transition-colors sm:ml-0"
+            className="bg-ink text-paper hover:bg-aqua ml-auto flex min-h-11 items-center rounded-sm px-3.5 text-[13px] font-semibold transition-colors sm:ml-0"
           >
             Start a call
           </Link>

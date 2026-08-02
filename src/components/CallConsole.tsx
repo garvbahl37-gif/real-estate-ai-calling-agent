@@ -340,7 +340,7 @@ export function CallConsole() {
                     key={l.id}
                     onClick={() => setLanguage(l.id)}
                     className={cn(
-                      "border-rule py-2 text-[12px] font-semibold transition-colors not-last:border-r",
+                      "border-rule min-h-11 text-[12px] font-semibold transition-colors not-last:border-r",
                       language === l.id ? "bg-ink text-paper" : "text-ink-2 hover:bg-paper-2",
                     )}
                   >
