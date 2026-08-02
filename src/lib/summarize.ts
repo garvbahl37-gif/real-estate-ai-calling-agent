@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEY, TEXT_MODEL_FALLBACKS } from "./config";
+import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isQuotaError } from "./config";
 import { PROJECTS, formatInr } from "./projects";
 import type { CallRecord, CallSummary, LeadRequirements } from "./types";
 
@@ -130,9 +130,9 @@ const FALLBACK: CallSummary = {
 };
 
 export async function summarizeCall(call: CallRecord): Promise<CallSummary> {
-  if (!GEMINI_API_KEY) return { ...FALLBACK, summary: "GEMINI_API_KEY is not configured on the server." };
-
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
+  if (!GEMINI_API_KEYS.length) {
+    return { ...FALLBACK, summary: "GEMINI_API_KEY is not configured on the server." };
+  }
 
   const prompt = `You are a sales operations analyst at Aarambh Realty. Below is a completed call
 between our AI calling agent "Priya" and a prospective buyer. Produce the CRM record for it.
@@ -170,41 +170,51 @@ ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality} ${p.city}, ${p.priceR
 
   let lastError = "";
 
-  // Walk the fallback list. A 429 means that model's daily free-tier quota is
-  // spent, not that the request was wrong, so the next model is worth trying;
-  // any other failure is likely to repeat, so stop there.
+  // Model outer, key inner. Rotating the key first keeps output quality
+  // identical — it is the same model against a different quota bucket — and
+  // only drops to a weaker model once every key is spent on the preferred one.
+  //
+  // A 429 means quota, not a malformed request, so it is worth another attempt.
+  // Anything else will repeat identically, so stop immediately rather than
+  // burning the remaining keys on the same failure.
   for (const model of TEXT_MODEL_FALLBACKS) {
-    try {
-      const res = await ai.models.generateContent({
-        model,
-        contents: prompt,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: SUMMARY_SCHEMA,
-          temperature: 0.3,
-          // A short structured extraction — thinking buys nothing and costs latency.
-          thinkingConfig: { thinkingBudget: 0 },
-        },
-      });
+    for (const apiKey of GEMINI_API_KEYS) {
+      const ai = new GoogleGenAI({ apiKey });
+      try {
+        const res = await ai.models.generateContent({
+          model,
+          contents: prompt,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: SUMMARY_SCHEMA,
+            temperature: 0.3,
+            // A short structured extraction — thinking buys nothing and costs latency.
+            thinkingConfig: { thinkingBudget: 0 },
+          },
+        });
 
-      const text = res.text;
-      if (!text) {
-        lastError = `${model} returned no text`;
-        continue;
+        const text = res.text;
+        if (!text) {
+          lastError = `${model} returned no text`;
+          continue;
+        }
+
+        const parsed = JSON.parse(text) as CallSummary;
+
+        // Never let the model's version of a field overwrite something the agent
+        // explicitly captured via a tool call during the conversation.
+        parsed.requirements = { ...parsed.requirements, ...stripEmpty(call.requirements) };
+        parsed.qualification.score = Math.max(0, Math.min(100, Math.round(parsed.qualification.score ?? 0)));
+        return parsed;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        lastError = `${model}: ${message}`;
+        if (!isQuotaError(message)) return {
+          ...FALLBACK,
+          summary: `Summarisation failed — ${lastError}. The transcript and captured requirements below are unaffected.`,
+          requirements: call.requirements,
+        };
       }
-
-      const parsed = JSON.parse(text) as CallSummary;
-
-      // Never let the model's version of a field overwrite something the agent
-      // explicitly captured via a tool call during the conversation.
-      parsed.requirements = { ...parsed.requirements, ...stripEmpty(call.requirements) };
-      parsed.qualification.score = Math.max(0, Math.min(100, Math.round(parsed.qualification.score ?? 0)));
-      return parsed;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      lastError = `${model}: ${message}`;
-      const quotaExhausted = /429|RESOURCE_EXHAUSTED|quota/i.test(message);
-      if (!quotaExhausted) break;
     }
   }
 

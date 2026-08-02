@@ -51,24 +51,6 @@ interface TokenResponse {
   warning?: string;
 }
 
-/**
- * Noise-gate tuning. ABSOLUTE_NOISE_FLOOR is a hard minimum in normalised RMS —
- * ordinary speech at a normal distance sits well above it, while a quiet room
- * sits below. The hangover keeps the gate open across the short gaps inside a
- * sentence.
- */
-const ABSOLUTE_NOISE_FLOOR = 0.006;
-const GATE_HANGOVER_MS = 900;
-/**
- * Chunks kept back while the gate is shut, and replayed the instant it opens.
- *
- * A gate that only forwards audio from the moment it triggers always eats the
- * attack of the first word — the onset of a syllable is quiet, so it is judged
- * noise, and the model hears "…aiye" instead of "bataiye". Two chunks is ~256 ms
- * of pre-roll, comfortably more than a word onset.
- */
-const PRE_ROLL_CHUNKS = 2;
-
 const MAX_RECONNECTS = 3;
 const MAX_TOTAL_RECONNECTS = 8;
 
@@ -141,9 +123,6 @@ export class LiveCall {
 
   private micLevel = 0;
   private agentLevel = 0;
-  private noiseFloor = ABSOLUTE_NOISE_FLOOR;
-  private gateOpenUntil = 0;
-  private preRoll: ArrayBuffer[] = [];
   /** Records both sides so the demo does not depend on OS audio routing. */
   private recorder = new CallRecorder();
   private levelRaf?: number;
@@ -358,27 +337,7 @@ export class LiveCall {
     }
   }
 
-  /**
-   * Client-side noise gate. Nothing reaches the model unless it plausibly
-   * contains speech.
-   *
-   * The server's own VAD decides when a *turn* starts and ends, but it still
-   * transcribes whatever audio it is given — and given a couple of seconds of
-   * room tone, a fan, or a laptop's own speaker bleed, it will confidently
-   * invent a sentence. Those arrive as phantom caller turns: a line nobody
-   * said, which the agent then answers. Filtering at the source is the only
-   * place this can be fixed properly, because by the time the text comes back
-   * it is indistinguishable from real speech.
-   *
-   * The floor adapts, because a laptop in a quiet room and a phone in a cafe
-   * have very different baselines. It tracks the quiet passages quickly and
-   * loud ones barely at all, so sustained speech never raises the bar against
-   * itself.
-   *
-   * The hangover is what protects real speech: once the gate opens it stays
-   * open for a beat, so trailing consonants and the short pauses inside a
-   * sentence are not chopped out mid-word.
-   */
+
   private sendAudioChunk(buffer: ArrayBuffer) {
     try {
       this.session?.sendRealtimeInput({
@@ -388,30 +347,8 @@ export class LiveCall {
         },
       });
     } catch {
-      // Socket closed between the check and the send — the close handler
-      // will pick it up.
+      // Socket closed between the check and the send — the close handler picks it up.
     }
-  }
-
-  private gateIsOpen() {
-    return performance.now() < this.gateOpenUntil;
-  }
-
-  private passesNoiseGate(rms: number): boolean {
-    if (typeof rms !== "number" || Number.isNaN(rms)) return true; // no signal to judge on — let it through
-
-    // Adapt downward fast, upward slowly.
-    this.noiseFloor =
-      rms < this.noiseFloor ? this.noiseFloor * 0.9 + rms * 0.1 : this.noiseFloor * 0.995 + rms * 0.005;
-
-    const threshold = Math.max(ABSOLUTE_NOISE_FLOOR, this.noiseFloor * 2.5);
-    const now = performance.now();
-
-    if (rms > threshold) {
-      this.gateOpenUntil = now + GATE_HANGOVER_MS;
-      return true;
-    }
-    return now < this.gateOpenUntil;
   }
 
   /* -------------------------------------------------------------- */
@@ -453,41 +390,17 @@ export class LiveCall {
       if (data.type === "pcm") {
         if (!this.session || this.closed) return;
         const buffer = data.buffer as ArrayBuffer;
-
-        // Recorded before gating: the gate exists to stop the *model*
-        // hallucinating on room tone, not to censor the recording.
         this.recorder.pushMic(new Int16Array(buffer));
-
-        const wasOpen = this.gateIsOpen();
-        if (!this.passesNoiseGate(data.rms as number)) {
-          // Hold it back in case the next chunk turns out to be speech.
-          this.preRoll.push(buffer);
-          if (this.preRoll.length > PRE_ROLL_CHUNKS) this.preRoll.shift();
-
-          // Closing the gate has to be announced, not merely done.
-          //
-          // Server-side voice-activity detection decides the caller has
-          // finished by hearing silence. A gate that simply stops transmitting
-          // gives it nothing to hear, so it waits on its own timeout instead —
-          // which lands as the agent being slow to answer. `audioStreamEnd` is
-          // the explicit signal for "the caller stopped", and sending it the
-          // moment the gate shuts is faster than any amount of trailing silence.
-          if (wasOpen) {
-            try {
-              this.session.sendRealtimeInput({ audioStreamEnd: true });
-            } catch {
-              /* socket closing */
-            }
-          }
-          return;
-        }
-
-        // Gate just opened — send the held-back audio first so the word starts
-        // where the caller started it.
-        if (!wasOpen && this.preRoll.length) {
-          for (const held of this.preRoll) this.sendAudioChunk(held);
-        }
-        this.preRoll.length = 0;
+        // Every chunk goes to the model, including the quiet ones.
+        //
+        // An earlier version gated this on input level, to stop the model
+        // inventing words out of room tone. That turned out to be the wrong
+        // diagnosis — the "hallucinated" turns were a real microphone picking up
+        // real speech in the room — and the gate caused a worse problem than the
+        // one it was meant to solve: it closes during the ordinary pauses inside
+        // a sentence, which fragments the stream and makes the agent slow and
+        // hesitant to reply. Continuous audio is also what server-side
+        // end-of-speech detection expects; silence is a signal, not an absence.
         this.sendAudioChunk(buffer);
       } else if (data.type === "level") {
         this.micLevel = this.muted ? 0 : data.rms;
@@ -803,7 +716,6 @@ export class LiveCall {
 
     this.micLevel = 0;
     this.agentLevel = 0;
-    this.preRoll.length = 0;
     this.events.onLevel?.(0, 0);
   }
 

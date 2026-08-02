@@ -27,12 +27,49 @@ export const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
  */
 export const TEXT_MODEL_FALLBACKS = [
   TEXT_MODEL,
+  // Verified working while gemini-3.5-flash and 2.0-flash were quota-exhausted.
   "gemini-3-flash-preview",
+  "gemini-3.6-flash",
   "gemini-3.1-flash-lite",
   "gemini-2.0-flash",
 ].filter((m, i, a) => a.indexOf(m) === i);
 
-export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
+/**
+ * Every Gemini key available, primary first.
+ *
+ * Free-tier quota is per *project*, not per model alone, so a second key issued
+ * from a different project is a genuinely independent bucket. Exhausting one is
+ * easy — gemini-3.5-flash allows 20 generate-content requests a day — and the
+ * failure lands as a missing call summary or a call that will not start, which
+ * is the worst possible moment for it.
+ *
+ * Accepts either a comma-separated GEMINI_API_KEYS or numbered
+ * GEMINI_API_KEY_2 / _3 vars, so it works with whatever is easiest to set on
+ * the host.
+ */
+export const GEMINI_API_KEYS: string[] = Array.from(
+  new Set(
+    [
+      process.env.GEMINI_API_KEY,
+      process.env.GOOGLE_API_KEY,
+      ...(process.env.GEMINI_API_KEYS ?? "").split(","),
+      process.env.GEMINI_API_KEY_2,
+      process.env.GEMINI_API_KEY_3,
+      process.env.GEMINI_API_KEY_4,
+      process.env.GEMINI_API_KEY_5,
+    ]
+      .map((k) => (k ?? "").trim())
+      .filter(Boolean),
+  ),
+);
+
+/** The primary key. Kept as a single export because most call sites want one. */
+export const GEMINI_API_KEY = GEMINI_API_KEYS[0] ?? "";
+
+/** True when the error is a quota/rate-limit rejection rather than a bad request. */
+export function isQuotaError(message: string): boolean {
+  return /429|RESOURCE_EXHAUSTED|quota|rate limit/i.test(message);
+}
 
 /**
  * Dev escape hatch. Ephemeral tokens are the correct way to drive the Live API

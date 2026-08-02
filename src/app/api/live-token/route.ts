@@ -1,7 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
 import { NextResponse } from "next/server";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
-import { ALLOW_DIRECT_KEY_FALLBACK, GEMINI_API_KEY, LIVE_MODEL, hasGeminiKey, isKnownLiveModel } from "@/lib/config";
+import {
+  ALLOW_DIRECT_KEY_FALLBACK,
+  GEMINI_API_KEY,
+  GEMINI_API_KEYS,
+  LIVE_MODEL,
+  hasGeminiKey,
+  isKnownLiveModel,
+  isQuotaError,
+} from "@/lib/config";
 import { buildLiveConfig } from "@/lib/live-config";
 import { RULES, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { formatZodError, tokenRequestSchema } from "@/lib/validation";
@@ -71,57 +79,68 @@ export async function POST(req: Request) {
     channel: "browser",
   });
 
-  const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
-
-  try {
-    const now = Date.now();
-    const token = await ai.authTokens.create({
-      config: {
-        // One session per token — a leaked token can't be replayed into a second call.
-        uses: 1,
-        // Ceiling on how long the resulting session may run.
-        expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
-        // The token must be *used* within two minutes of being minted.
-        newSessionExpireTime: new Date(now + 2 * 60 * 1000).toISOString(),
-        liveConnectConstraints: { model, config: liveConfig },
-      },
-    });
-
-    if (!token.name) throw new Error("Token response contained no name");
-
-    return NextResponse.json(
-      { mode: "ephemeral", token: token.name, model, voice },
-      { headers: rateLimitHeaders(limit) },
-    );
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-
-    if (ALLOW_DIRECT_KEY_FALLBACK) {
-      // Without a token there is nothing to lock the config to, so the client
-      // has to send it — which is exactly why this path is dev-only.
-      return NextResponse.json(
-        {
-          mode: "direct",
-          token: GEMINI_API_KEY,
-          model,
-          voice,
-          liveConfig,
-          warning:
-            "Ephemeral token minting failed; falling back to the raw API key in the browser. " +
-            "Development only — unset ALLOW_DIRECT_KEY_FALLBACK before deploying.",
+  // Try each configured key in turn. Free-tier Live quota is per project, so a
+  // spent primary key must not mean "no demo" — that failure would land as the
+  // call simply refusing to start.
+  let message = "no API key configured";
+  for (const apiKey of GEMINI_API_KEYS) {
+    const ai = new GoogleGenAI({ apiKey });
+    try {
+      const now = Date.now();
+      const token = await ai.authTokens.create({
+        config: {
+          // One session per token — a leaked token can't be replayed into a second call.
+          uses: 1,
+          // Ceiling on how long the resulting session may run.
+          expireTime: new Date(now + 30 * 60 * 1000).toISOString(),
+          // The token must be *used* within two minutes of being minted.
+          newSessionExpireTime: new Date(now + 2 * 60 * 1000).toISOString(),
+          liveConnectConstraints: { model, config: liveConfig },
         },
+      });
+
+      if (!token.name) throw new Error("Token response contained no name");
+
+      return NextResponse.json(
+        { mode: "ephemeral", token: token.name, model, voice },
         { headers: rateLimitHeaders(limit) },
       );
+    } catch (err) {
+      message = err instanceof Error ? err.message : String(err);
+      // Quota is worth retrying on another key; a bad request is not.
+      if (!isQuotaError(message)) break;
     }
+  }
 
+  // Every key is spent or rejected.
+  if (ALLOW_DIRECT_KEY_FALLBACK) {
+    // Without a token there is nothing to lock the config to, so the client
+    // has to send it — which is exactly why this path is dev-only.
     return NextResponse.json(
       {
-        error: `Could not mint an ephemeral token: ${message}`,
-        hint:
-          "Check that GEMINI_API_KEY is valid and that the Live API is available for it. For local debugging, " +
-          "ALLOW_DIRECT_KEY_FALLBACK=true connects with the raw key instead.",
+        mode: "direct",
+        token: GEMINI_API_KEY,
+        model,
+        voice,
+        liveConfig,
+        warning:
+          "Ephemeral token minting failed; falling back to the raw API key in the browser. " +
+          "Development only — unset ALLOW_DIRECT_KEY_FALLBACK before deploying.",
       },
-      { status: 502 },
+      { headers: rateLimitHeaders(limit) },
     );
   }
+
+  const quota = isQuotaError(message);
+  return NextResponse.json(
+    {
+      error: quota
+        ? `All ${GEMINI_API_KEYS.length} Gemini key(s) are out of quota. The free tier resets daily.`
+        : `Could not mint an ephemeral token: ${message}`,
+      hint: quota
+        ? "Add another key as GEMINI_API_KEY_2 (or a comma-separated GEMINI_API_KEYS) — each project has its own quota."
+        : "Check that the key is valid and that the Live API is available for it.",
+    },
+    { status: quota ? 429 : 502 },
+  );
 }

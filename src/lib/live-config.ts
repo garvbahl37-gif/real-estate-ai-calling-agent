@@ -1,4 +1,4 @@
-import { EndSensitivity, Modality, StartSensitivity, type LiveConnectConfig } from "@google/genai";
+import { Modality, type LiveConnectConfig } from "@google/genai";
 import { AGENT_FUNCTION_DECLARATIONS } from "./agent-tools";
 import { DEFAULT_VOICE, buildSystemInstruction, type PromptOptions } from "./agent-prompt";
 
@@ -108,32 +108,27 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
 
     realtimeInputConfig: {
       automaticActivityDetection: {
-        // The Live API defaults to START_SENSITIVITY_HIGH — "detect the start of
-        // speech more often". On a real microphone in a real room that means a
-        // fan, a keyboard or traffic gets committed as a user turn, the ASR
-        // hallucinates words out of it, and the agent answers something nobody
-        // said. Keeping this LOW is what stopped phantom caller turns, and it
-        // costs nothing in responsiveness.
-        startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+        // Both sensitivities are left at the Live API's defaults (HIGH), which
+        // is where this started and where it felt responsive.
+        //
+        // An earlier attempt set both to LOW to stop what looked like the model
+        // hallucinating speech out of room noise. That diagnosis was wrong —
+        // the microphone was picking up real speech in the room — and LOW
+        // sensitivity makes her measurably slower at both ends: slower to notice
+        // you have started, and slower to accept that you have stopped. Chasing
+        // a phantom cost real responsiveness, so it is reverted.
+        //
+        // The two settings below are the honest controls, and are enough.
 
-        // End-of-speech is a different trade, and the first tuning got it wrong.
-        // LOW makes her wait longer before deciding you have finished, which
-        // reads as her being slow to answer — the delay lands in exactly the
-        // place a caller notices it. HIGH plus an explicit silence window gives
-        // a snappy reply while still tolerating the pause someone takes while
-        // doing arithmetic on a budget.
-        endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
+        // How long a pause has to run before your turn is treated as finished.
+        // Long enough to survive a breath or a moment's arithmetic on a budget,
+        // short enough that the reply feels immediate. A phone line adds codec
+        // and network gaps on top of the human ones, so it gets a little more.
+        silenceDurationMs: channel === "phone" ? 800 : 650,
 
-        // The real control. ~600 ms is long enough to survive a mid-sentence
-        // breath and short enough that the reply feels immediate. A phone line
-        // adds codec and network gaps on top of the human ones, so it gets more.
-        silenceDurationMs: channel === "phone" ? 800 : 600,
-
-        // How much sustained sound is needed before a turn opens. Too high and
-        // the first syllable is spent proving you are talking rather than being
-        // heard; the client-side noise gate already handles short bursts, so
-        // this can stay low.
-        prefixPaddingMs: 150,
+        // How much sustained sound opens a turn. Low, so the first syllable is
+        // heard rather than spent proving you are talking.
+        prefixPaddingMs: 200,
       },
     },
 
