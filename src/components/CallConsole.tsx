@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LeadPanel } from "@/components/LeadPanel";
 import { Shirorekha } from "@/components/Shirorekha";
+import { Teleprompter } from "@/components/Teleprompter";
 import { Transcript } from "@/components/Transcript";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
 import { DEFAULT_LIVE_MODEL, LIVE_MODELS } from "@/lib/models";
@@ -52,6 +53,7 @@ export function CallConsole() {
   const [log, setLog] = useState<string[]>([]);
   const [muted, setMuted] = useState(false);
   const [typed, setTyped] = useState("");
+  const [prompter, setPrompter] = useState(false);
 
   const [summary, setSummary] = useState<CallSummary | null>(null);
   const [summarising, setSummarising] = useState(false);
@@ -211,7 +213,7 @@ export function CallConsole() {
   const showResult = (state === "ended" || state === "error") && turns.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-5 sm:px-8">
+    <div className={cn("mx-auto w-full max-w-[1400px] px-5 sm:px-8", prompter && "pb-64")}>
       {/* --- Live rule: the signature element ------------------------- */}
       <div className="pt-6">
         <Shirorekha levelsRef={levelsRef} active={active} height={64} />
@@ -237,6 +239,16 @@ export function CallConsole() {
         )}
 
         <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setPrompter((v) => !v)}
+            aria-pressed={prompter}
+            className={cn(
+              "border-rule hover:border-ink min-h-11 rounded-sm border px-3 font-mono text-[11px] font-semibold tracking-wide uppercase transition-colors",
+              prompter ? "bg-ink text-paper border-ink" : "text-ink-2",
+            )}
+          >
+            Teleprompter
+          </button>
           {active ? (
             <>
               <button
@@ -580,6 +592,8 @@ export function CallConsole() {
           )}
         </div>
       ) : null}
+
+      {prompter ? <Teleprompter onClose={() => setPrompter(false)} /> : null}
 
       {/* --- Connection log ------------------------------------------ */}
       {log.length > 0 && !showSetup ? (

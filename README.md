@@ -73,7 +73,7 @@ rather than appended.
 | Storage | Neon Postgres (free), in-memory fallback | Clone-and-run works with no database. |
 | Telephony | Twilio Media Streams ↔ Node WebSocket bridge | Optional. Same agent, different transport. |
 | Hosting | Vercel | Free tier. |
-| Tests | `node:test` + Playwright | 33 unit tests, plus scripted live-call E2E. |
+| Tests | `node:test` + Playwright | 40 unit tests, plus scripted live-call E2E. |
 
 **AI models used:** `gemini-3.1-flash-live-preview` (conversation) and `gemini-3.5-flash`
 (summarisation). Two other Live models are selectable in the UI at demo time.
@@ -176,8 +176,16 @@ pnpm dev                                            # → http://localhost:3000
 
 No database needed — it falls back to an in-memory store. Set `DATABASE_URL` for persistence.
 
+### Recording the demo
+
+The call page has a **Teleprompter** button. It docks a lower-third bar to the bottom of the screen
+with a 12-beat script — what to say (Devanagari plus transliteration), which evaluation criterion the
+line demonstrates, and what to point at on screen as it happens. Space or → advances, ← goes back,
+Esc closes. It sits below the transcript and lead panel on purpose, so a screen recording still shows
+both filling in.
+
 ```bash
-pnpm test        # 33 unit tests
+pnpm test        # 40 unit tests
 pnpm typecheck
 pnpm lint
 node scripts/e2e-conversation.mjs   # scripted 7-turn Hinglish call against a running server
