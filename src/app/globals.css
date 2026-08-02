@@ -1,0 +1,181 @@
+@import "tailwindcss";
+
+/*
+  Palette note: the accents are lifted from Delhi NCR transit line branding —
+  the Aqua Line runs past Sector 150 and the Magenta Line is the other half of
+  the corridor these projects sell on. Teal is the resting state, magenta is
+  "live". Sodium amber is the street-light colour, used only for warm leads.
+*/
+@theme {
+  --color-paper: #faf9f6;
+  --color-paper-2: #f3f1ec;
+  --color-ink: #15171e;
+  --color-ink-2: #464a56;
+  --color-ink-3: #7c8090;
+  --color-rule: #dcd8cf;
+  --color-rule-2: #ebe8e1;
+
+  --color-aqua: #0b6e6e;
+  --color-aqua-2: #0e8c8c;
+  --color-aqua-wash: #e3f0ef;
+
+  --color-magenta: #c21e56;
+  --color-magenta-2: #e0447a;
+  --color-magenta-wash: #fbe7ee;
+
+  --color-amber: #b8681a;
+  --color-amber-wash: #f8eddf;
+
+  --font-display: var(--font-tiro), Georgia, serif;
+  --font-sans: var(--font-archivo), "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", monospace;
+}
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  min-height: 100%;
+}
+
+/* ------------------------------------------------------------------ */
+/* शिरोरेखा — the horizontal stroke that binds letters into a word in   */
+/* Devanagari. Here it binds the interface: sections hang from one.     */
+/* ------------------------------------------------------------------ */
+
+.shiro {
+  position: relative;
+  padding-top: 0.75rem;
+}
+.shiro::before {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 1.5px;
+  background: var(--color-ink);
+}
+.shiro-soft::before {
+  background: var(--color-rule);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------------ */
+
+@keyframes pulse-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.82);
+  }
+}
+.live-dot {
+  animation: pulse-live 1.6s ease-in-out infinite;
+}
+
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise-in {
+  animation: rise-in 0.34s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+@keyframes field-land {
+  0% {
+    background-color: var(--color-aqua-wash);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+/* Flashes a CRM field the moment a tool call populates it. */
+.field-land {
+  animation: field-land 1.1s ease-out both;
+}
+
+@keyframes marquee-dots {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.thinking-dot {
+  animation: marquee-dots 1.1s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+::selection {
+  background: var(--color-aqua);
+  color: var(--color-paper);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-aqua);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-rule) transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-rule);
+  border-radius: 3px;
+}
+.thin-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,58 @@
+import { NextResponse } from "next/server";
+import { RULES, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
+import { getCall, updateCall } from "@/lib/store";
+import { summarizeCall } from "@/lib/summarize";
+import { callIdSchema } from "@/lib/validation";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+// One Flash call with thinking disabled — 60s is generous, but leaves room for
+// a cold start on the free tier.
+export const maxDuration = 60;
+
+type Ctx = { params: Promise<{ id: string }> };
+
+/**
+ * Generates (or regenerates) the post-call summary and persists it.
+ * Called by the browser client when a call ends, and by the telephony bridge
+ * once Twilio reports the call completed.
+ */
+export async function POST(req: Request, ctx: Ctx) {
+  const limit = await checkRateLimit(req, RULES.summaryPerIp, RULES.summaryGlobal);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Summary generation is rate limited. Try again shortly." },
+      { status: 429, headers: rateLimitHeaders(limit) },
+    );
+  }
+
+  const { id: rawId } = await ctx.params;
+  const id = callIdSchema.safeParse(rawId);
+  if (!id.success) return NextResponse.json({ error: "Invalid call id" }, { status: 400 });
+
+  const body = (await req.json().catch(() => ({}))) as { force?: boolean };
+
+  const call = await getCall(id.data);
+  if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
+
+  if (call.summary && body.force !== true) {
+    return NextResponse.json({ summary: call.summary, cached: true });
+  }
+
+  // Summarising an empty transcript burns quota to produce nothing useful.
+  const spoken = call.transcript.filter((t) => t.text.trim()).length;
+  if (spoken === 0) {
+    return NextResponse.json({ error: "Nothing was said on this call — no summary to generate." }, { status: 422 });
+  }
+
+  const summary = await summarizeCall(call);
+
+  const endedAt = call.endedAt ?? new Date().toISOString();
+  const durationSec =
+    call.durationSec ??
+    Math.max(0, Math.round((new Date(endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000));
+
+  await updateCall(id.data, { summary, status: "completed", endedAt, durationSec });
+
+  return NextResponse.json({ summary, cached: false }, { headers: rateLimitHeaders(limit) });
+}
