@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SignalPath } from "@/components/SignalPath";
 import { AGENT_FUNCTION_DECLARATIONS } from "@/lib/agent-tools";
+import { PROJECTS, operatingMarkets } from "@/lib/projects";
 
 export const metadata: Metadata = {
   title: "How it works — architecture & stack",
@@ -27,7 +29,7 @@ const CHALLENGES = [
   },
   {
     title: "enableAffectiveDialog kills token-based sessions",
-    body: "Every session died on connect with a bare “Internal error encountered.” Bisecting the config field by field isolated one flag: enableAffectiveDialog. It fails identically on v1alpha and v1beta, and only when the config is locked into a token — it works fine passed directly with a raw API key. It is off on the browser path and on for the Twilio bridge.",
+    body: "Every session died on connect with a bare “Internal error encountered.” Bisecting the config field by field isolated one flag: enableAffectiveDialog. It fails identically on v1alpha and v1beta, through a token and with a raw key, on both transports — it only appears to work with a minimal config, which is what made it look transport-specific at first. It is off, behind a flag, so it is one argument to re-test when the preview model stabilises.",
   },
   {
     title: "The agent will not speak first",
@@ -40,6 +42,10 @@ const CHALLENGES = [
   {
     title: "She invented a city",
     body: "An early opening line was “aapne humaari Gurgaon wali property ke liye enquiry ki thi” — there are no Gurgaon projects. It had generalised from an example in the prompt. Fixed by removing the location from the opening template and adding an explicit geography rule listing the only markets she operates in.",
+  },
+    {
+    title: "A fix for a bug that did not exist",
+    body: "Transcripts filled with sentences nobody had said, so I built a client-side noise gate to stop the model inventing words out of room tone. It made the agent noticeably slow: the gate closes during the ordinary pauses inside a sentence, fragmenting the stream. Measuring the microphone afterwards showed the real cause — it was picking up actual speech in the room at ten times the gate threshold. The gate was reverted. The lesson was to measure the input before theorising about the model.",
   },
   {
     title: "gemini-2.5-flash is a trap on new keys",
@@ -71,52 +77,15 @@ export default function HowItWorksPage() {
 
         {/* ---------------- Signal path ---------------- */}
         <section className="mt-14">
-          <div className="shiro shiro-soft">
+          <div className="shiro">
             <span className="eyebrow">Signal path</span>
+            <p className="text-ink-2 mt-3 max-w-[70ch] text-[14px] leading-relaxed">
+              Two transports, one agent. The browser and the phone differ only in how audio gets in and out — the
+              prompt, the tools and the executor behind them are the same code.
+            </p>
           </div>
-          <div className="thin-scroll mt-5 overflow-x-auto">
-            <pre className="text-ink-2 font-mono text-[11.5px] leading-[1.75] whitespace-pre">{`  BROWSER DEMO                                          PHONE DEMO
-  ────────────                                          ──────────
-  Microphone                                            Caller dials Twilio number
-      │  getUserMedia                                       │
-      ▼                                                     ▼
-  AudioWorklet  pcm-recorder                            TwiML  <Connect><Stream>
-      │  Float32 → Int16, 16 kHz, 128 ms chunks             │
-      │                                                     ▼
-      │                                                 Twilio Media Streams
-      │                                                 8 kHz μ-law, base64
-      │                                                     │
-      │                                                     ▼
-      │                                                 Node WS bridge
-      │                                                 μ-law → PCM 16 kHz
-      │                                                     │
-      └──────────────┐                     ┌────────────────┘
-                     ▼                     ▼
-              ╔═══════════════════════════════════╗
-              ║   Gemini Live API  (WebSocket)    ║
-              ║   native audio · speech-to-speech ║
-              ╚═══════════════════════════════════╝
-                     │                     │
-        audio 24 kHz │                     │ toolCall
-        transcripts  │                     ▼
-                     │              executeAgentTool()
-                     │              ├─ update_lead_requirements
-                     │              ├─ search_projects
-                     │              ├─ get_project_details
-                     │              ├─ schedule_site_visit
-                     │              └─ end_call
-                     ▼                     │
-              AudioWorklet pcm-player      │  requirements patch
-              (queue + instant flush       ▼
-               on barge-in)          Live CRM panel  ──►  PATCH /api/calls/:id
-                                                              │
-                                            call ends         ▼
-                                                        Gemini 3.5 Flash
-                                                        responseSchema
-                                                              │
-                                                              ▼
-                                                        Postgres · summary,
-                                                        score, objections`}</pre>
+          <div className="mt-8">
+            <SignalPath />
           </div>
         </section>
 
@@ -147,6 +116,26 @@ export default function HowItWorksPage() {
               </div>
             ))}
           </div>
+        </section>
+
+        {/* ---------------- Scale ---------------- */}
+        <section className="mt-20">
+          <div className="shiro">
+            <span className="eyebrow">By the numbers</span>
+          </div>
+          <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+            {[
+              { k: "Projects in the catalogue", v: String(PROJECTS.length) },
+              { k: "Markets covered", v: String(operatingMarkets().length) },
+              { k: "Agent tools", v: String(AGENT_FUNCTION_DECLARATIONS.length) },
+              { k: "Unit tests", v: "42" },
+            ].map((s2) => (
+              <div key={s2.k} className="shiro shiro-soft">
+                <dt className="eyebrow">{s2.k}</dt>
+                <dd className="font-display text-ink tnum mt-1.5 text-[30px] leading-none">{s2.v}</dd>
+              </div>
+            ))}
+          </dl>
         </section>
 
         {/* ---------------- Stack ---------------- */}
