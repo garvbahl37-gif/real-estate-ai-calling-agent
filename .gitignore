@@ -43,3 +43,6 @@ next-env.d.ts
 # Local test artefacts
 scripts/_*
 scripts/shot-*.png
+
+# Rendered title frame (regenerate with pnpm demo:title)
+demo/title.png
