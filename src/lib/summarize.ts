@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEY, TEXT_MODEL } from "./config";
+import { GEMINI_API_KEY, TEXT_MODEL_FALLBACKS } from "./config";
 import { PROJECTS, formatInr } from "./projects";
 import type { CallRecord, CallSummary, LeadRequirements } from "./types";
 
@@ -168,37 +168,54 @@ ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality} ${p.city}, ${p.priceR
   far out, wants ready-to-move" beats "possession concern".
 - \`nextAction\` must be something a human can execute tomorrow morning.`;
 
-  try {
-    const res = await ai.models.generateContent({
-      model: TEXT_MODEL,
-      contents: prompt,
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: SUMMARY_SCHEMA,
-        temperature: 0.3,
-        // 2.5 Flash thinks by default; this is a short structured extraction and
-        // the latency isn't worth it.
-        thinkingConfig: { thinkingBudget: 0 },
-      },
-    });
+  let lastError = "";
 
-    const text = res.text;
-    if (!text) return FALLBACK;
+  // Walk the fallback list. A 429 means that model's daily free-tier quota is
+  // spent, not that the request was wrong, so the next model is worth trying;
+  // any other failure is likely to repeat, so stop there.
+  for (const model of TEXT_MODEL_FALLBACKS) {
+    try {
+      const res = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: SUMMARY_SCHEMA,
+          temperature: 0.3,
+          // A short structured extraction — thinking buys nothing and costs latency.
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      });
 
-    const parsed = JSON.parse(text) as CallSummary;
+      const text = res.text;
+      if (!text) {
+        lastError = `${model} returned no text`;
+        continue;
+      }
 
-    // Never let the model's version of a field overwrite something the agent
-    // explicitly captured via a tool call during the conversation.
-    parsed.requirements = { ...parsed.requirements, ...stripEmpty(call.requirements) };
-    parsed.qualification.score = Math.max(0, Math.min(100, Math.round(parsed.qualification.score ?? 0)));
-    return parsed;
-  } catch (err) {
-    return {
-      ...FALLBACK,
-      summary: `Summarisation failed: ${err instanceof Error ? err.message : String(err)}`,
-      requirements: call.requirements,
-    };
+      const parsed = JSON.parse(text) as CallSummary;
+
+      // Never let the model's version of a field overwrite something the agent
+      // explicitly captured via a tool call during the conversation.
+      parsed.requirements = { ...parsed.requirements, ...stripEmpty(call.requirements) };
+      parsed.qualification.score = Math.max(0, Math.min(100, Math.round(parsed.qualification.score ?? 0)));
+      return parsed;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastError = `${model}: ${message}`;
+      const quotaExhausted = /429|RESOURCE_EXHAUSTED|quota/i.test(message);
+      if (!quotaExhausted) break;
+    }
   }
+
+  return {
+    ...FALLBACK,
+    summary:
+      `Summarisation failed on every configured model. Last error — ${lastError}. ` +
+      `If this mentions quota, the free tier resets daily; the transcript and the requirements ` +
+      `captured during the call are unaffected and shown below.`,
+    requirements: call.requirements,
+  };
 }
 
 function stripEmpty(req: LeadRequirements): LeadRequirements {

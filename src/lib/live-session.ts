@@ -59,6 +59,15 @@ interface TokenResponse {
  */
 const ABSOLUTE_NOISE_FLOOR = 0.006;
 const GATE_HANGOVER_MS = 900;
+/**
+ * Chunks kept back while the gate is shut, and replayed the instant it opens.
+ *
+ * A gate that only forwards audio from the moment it triggers always eats the
+ * attack of the first word — the onset of a syllable is quiet, so it is judged
+ * noise, and the model hears "…aiye" instead of "bataiye". Two chunks is ~256 ms
+ * of pre-roll, comfortably more than a word onset.
+ */
+const PRE_ROLL_CHUNKS = 2;
 
 const MAX_RECONNECTS = 3;
 const MAX_TOTAL_RECONNECTS = 8;
@@ -134,6 +143,7 @@ export class LiveCall {
   private agentLevel = 0;
   private noiseFloor = ABSOLUTE_NOISE_FLOOR;
   private gateOpenUntil = 0;
+  private preRoll: ArrayBuffer[] = [];
   /** Records both sides so the demo does not depend on OS audio routing. */
   private recorder = new CallRecorder();
   private levelRaf?: number;
@@ -369,6 +379,24 @@ export class LiveCall {
    * open for a beat, so trailing consonants and the short pauses inside a
    * sentence are not chopped out mid-word.
    */
+  private sendAudioChunk(buffer: ArrayBuffer) {
+    try {
+      this.session?.sendRealtimeInput({
+        audio: {
+          data: arrayBufferToBase64(buffer),
+          mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`,
+        },
+      });
+    } catch {
+      // Socket closed between the check and the send — the close handler
+      // will pick it up.
+    }
+  }
+
+  private gateIsOpen() {
+    return performance.now() < this.gateOpenUntil;
+  }
+
   private passesNoiseGate(rms: number): boolean {
     if (typeof rms !== "number" || Number.isNaN(rms)) return true; // no signal to judge on — let it through
 
@@ -424,21 +452,43 @@ export class LiveCall {
       const data = e.data;
       if (data.type === "pcm") {
         if (!this.session || this.closed) return;
+        const buffer = data.buffer as ArrayBuffer;
+
         // Recorded before gating: the gate exists to stop the *model*
         // hallucinating on room tone, not to censor the recording.
-        this.recorder.pushMic(new Int16Array(data.buffer as ArrayBuffer));
-        if (!this.passesNoiseGate(data.rms as number)) return;
-        try {
-          this.session.sendRealtimeInput({
-            audio: {
-              data: arrayBufferToBase64(data.buffer as ArrayBuffer),
-              mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}`,
-            },
-          });
-        } catch {
-          // Socket closed between the check and the send — the close handler
-          // will pick it up.
+        this.recorder.pushMic(new Int16Array(buffer));
+
+        const wasOpen = this.gateIsOpen();
+        if (!this.passesNoiseGate(data.rms as number)) {
+          // Hold it back in case the next chunk turns out to be speech.
+          this.preRoll.push(buffer);
+          if (this.preRoll.length > PRE_ROLL_CHUNKS) this.preRoll.shift();
+
+          // Closing the gate has to be announced, not merely done.
+          //
+          // Server-side voice-activity detection decides the caller has
+          // finished by hearing silence. A gate that simply stops transmitting
+          // gives it nothing to hear, so it waits on its own timeout instead —
+          // which lands as the agent being slow to answer. `audioStreamEnd` is
+          // the explicit signal for "the caller stopped", and sending it the
+          // moment the gate shuts is faster than any amount of trailing silence.
+          if (wasOpen) {
+            try {
+              this.session.sendRealtimeInput({ audioStreamEnd: true });
+            } catch {
+              /* socket closing */
+            }
+          }
+          return;
         }
+
+        // Gate just opened — send the held-back audio first so the word starts
+        // where the caller started it.
+        if (!wasOpen && this.preRoll.length) {
+          for (const held of this.preRoll) this.sendAudioChunk(held);
+        }
+        this.preRoll.length = 0;
+        this.sendAudioChunk(buffer);
       } else if (data.type === "level") {
         this.micLevel = this.muted ? 0 : data.rms;
       }
@@ -753,6 +803,7 @@ export class LiveCall {
 
     this.micLevel = 0;
     this.agentLevel = 0;
+    this.preRoll.length = 0;
     this.events.onLevel?.(0, 0);
   }
 

@@ -112,18 +112,28 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
         // speech more often". On a real microphone in a real room that means a
         // fan, a keyboard or traffic gets committed as a user turn, the ASR
         // hallucinates words out of it, and the agent answers something nobody
-        // said. Two symptoms, one cause: junk text in the transcript, and a call
-        // that will not wind down because the agent keeps replying to phantoms.
+        // said. Keeping this LOW is what stopped phantom caller turns, and it
+        // costs nothing in responsiveness.
         startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
-        // Ending a turn less eagerly, for the same reason in reverse: a buyer
-        // pausing mid-sentence to do arithmetic on a budget should not be cut off.
-        endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
-        // A phone line adds codec and network gaps on top of the human ones.
-        silenceDurationMs: channel === "phone" ? 1100 : 800,
-        // Require a bit more sustained sound before opening a turn. Raising this
-        // is the single most effective guard against a short noise burst being
-        // treated as speech.
-        prefixPaddingMs: 300,
+
+        // End-of-speech is a different trade, and the first tuning got it wrong.
+        // LOW makes her wait longer before deciding you have finished, which
+        // reads as her being slow to answer — the delay lands in exactly the
+        // place a caller notices it. HIGH plus an explicit silence window gives
+        // a snappy reply while still tolerating the pause someone takes while
+        // doing arithmetic on a budget.
+        endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_HIGH,
+
+        // The real control. ~600 ms is long enough to survive a mid-sentence
+        // breath and short enough that the reply feels immediate. A phone line
+        // adds codec and network gaps on top of the human ones, so it gets more.
+        silenceDurationMs: channel === "phone" ? 800 : 600,
+
+        // How much sustained sound is needed before a turn opens. Too high and
+        // the first syllable is spent proving you are talking rather than being
+        // heard; the client-side noise gate already handles short bursts, so
+        // this can stay low.
+        prefixPaddingMs: 150,
       },
     },
 

@@ -16,6 +16,22 @@ export const LIVE_MODEL = process.env.GEMINI_LIVE_MODEL || DEFAULT_LIVE_MODEL;
  */
 export const TEXT_MODEL = process.env.GEMINI_TEXT_MODEL || "gemini-3.5-flash";
 
+/**
+ * Summarisation falls down this list on a 429.
+ *
+ * Free-tier quotas are per-model and small — gemini-3.5-flash allows 20
+ * requests a day — and they are easy to exhaust while iterating. Losing the
+ * call summary because one model is spent is a bad failure for something that
+ * has to work on demand in front of an interviewer, and these are independent
+ * quota buckets, so the second attempt usually succeeds.
+ */
+export const TEXT_MODEL_FALLBACKS = [
+  TEXT_MODEL,
+  "gemini-3-flash-preview",
+  "gemini-3.1-flash-lite",
+  "gemini-2.0-flash",
+].filter((m, i, a) => a.indexOf(m) === i);
+
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || "";
 
 /**
