@@ -185,14 +185,31 @@ node scripts/e2e-conversation.mjs   # scripted 7-turn Hinglish call against a ru
 
 ### Phone calls (optional)
 
+Two directions are supported. **Outbound is the one that works on a Twilio trial** — since October
+2023 an *inbound* call to a trial number is rejected unless the caller's own number is verified on
+that account, which you cannot ask an interviewer to do mid-interview. Outbound only needs the
+number being called to be verified, and your signup number is verified automatically. It is also
+the more honest demo: a sales executive rings the prospect.
+
 ```bash
-pnpm telephony                                   # bridge on :5050
-ngrok http 5050                                  # or cloudflared
+pnpm telephony                    # bridge on :5050  (terminal 1)
+ngrok http 5050                   # copy the https URL (terminal 2)
+# put it in .env.local as TELEPHONY_PUBLIC_HOST
+
+pnpm twilio:check                 # says exactly what is still missing
+pnpm twilio:call 9810012345       # Priya rings that number
 ```
 
-Set `TELEPHONY_PUBLIC_HOST=https://<your-tunnel>` and `TWILIO_AUTH_TOKEN` in `.env.local`, then point
-your Twilio number's Voice webhook at `https://<your-tunnel>/voice` (HTTP POST). A Twilio trial gives
-a free number and $15 credit.
+For inbound instead, point the number's Voice webhook at `https://<your-tunnel>/voice` (HTTP POST).
+
+Three account facts that are easy to lose an hour to:
+
+- **Twilio stopped selling Indian numbers in August 2024.** Use a US number — it can still call +91.
+- **India is disabled by default** under Voice → Geo Permissions on new accounts.
+- **A Restricted API key returns `20003 "Policy evaluation failed"`** for permissions it lacks, which
+  reads like a bad secret. Account setup needs the Auth Token or a Standard key.
+
+`pnpm twilio:check` diagnoses all three.
 
 You can verify the whole phone path without a number or a phone:
 

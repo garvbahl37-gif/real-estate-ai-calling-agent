@@ -11,7 +11,9 @@
     "telephony:start": "tsx telephony/server.ts",
     "db:init": "tsx scripts/init-db.ts",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/*.test.ts"
+    "test": "tsx --test tests/*.test.ts",
+    "twilio:check": "tsx scripts/twilio-doctor.mts",
+    "twilio:call": "tsx scripts/call-me.mts"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",

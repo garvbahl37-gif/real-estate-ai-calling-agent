@@ -87,15 +87,32 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
 
     const host = (PUBLIC_HOST || `https://${req.headers.host}`).replace(/^https?:\/\//, "").replace(/\/$/, "");
     const wsUrl = `wss://${host}/stream`;
-
     const response = new twilio.twiml.VoiceResponse();
+
+    // With machineDetection enabled, Twilio tells us who picked up. There is no
+    // one to sell to on a voicemail greeting, so hang up rather than open a
+    // Gemini session and talk to an answering machine.
+    const answeredBy = params.AnsweredBy ?? "";
+    if (/^machine/.test(answeredBy) || answeredBy === "fax") {
+      log(`answered by ${answeredBy} — hanging up`);
+      response.hangup();
+      res.writeHead(200, { "Content-Type": "text/xml" });
+      res.end(response.toString());
+      return;
+    }
+
+    // On an inbound call the prospect is `From`. On an outbound one we dialled
+    // them, so they are `To` and `From` is our own Twilio number — recording the
+    // wrong one would file every outbound lead under the Twilio number.
+    const outbound = (params.Direction ?? "").startsWith("outbound");
+    const prospect = (outbound ? params.To : params.From) ?? "";
+
     const connect = response.connect();
     const stream = connect.stream({ url: wsUrl });
-    // Twilio does not put the caller's number in the stream `start` event, so
-    // pass it through explicitly for the lead record.
-    stream.parameter({ name: "from", value: params.From ?? "" });
+    // The stream `start` event carries no phone number, so pass it through.
+    stream.parameter({ name: "from", value: prospect });
 
-    log(`incoming call from ${params.From ?? "unknown"} → ${wsUrl}`);
+    log(`${outbound ? "outbound" : "inbound"} call · prospect ${prospect || "unknown"} → ${wsUrl}`);
     res.writeHead(200, { "Content-Type": "text/xml" });
     res.end(response.toString());
     return;
