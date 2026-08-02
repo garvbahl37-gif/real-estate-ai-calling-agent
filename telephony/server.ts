@@ -66,20 +66,50 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
     return;
   }
 
+  // Diagnostic: proves whether plain TwiML executes on this account, isolating
+  // "the webhook is fine but Media Streams is unavailable" from "TwiML is
+  // broken". Twilio never requests our WebSocket if <Stream> is not permitted,
+  // and it reports that only in Alerts — which a restricted account cannot read.
+  if (url.pathname === "/voice-say") {
+    const r = new twilio.twiml.VoiceResponse();
+    r.say({ voice: "Polly.Aditi", language: "en-IN" }, "Hello. This is a plain TwiML test from the real estate agent bridge. If you can hear this, the webhook works.");
+    r.pause({ length: 1 });
+    r.hangup();
+    log("served /voice-say diagnostic TwiML");
+    res.writeHead(200, { "Content-Type": "text/xml" });
+    res.end(r.toString());
+    return;
+  }
+
   if (url.pathname === "/voice" && (req.method === "POST" || req.method === "GET")) {
     const body = req.method === "POST" ? await readBody(req).catch(() => "") : "";
     const params = Object.fromEntries(new URLSearchParams(body));
 
     // Twilio signs every webhook. Without this check anyone who finds the URL
     // can make the bridge place Gemini sessions on your quota.
+    if (process.env.TELEPHONY_DEBUG_HEADERS === "true") {
+      log(`/voice headers: ${JSON.stringify(req.headers)}`);
+    }
+
     if (VALIDATE_SIGNATURE && TWILIO_AUTH_TOKEN) {
       const signature = req.headers["x-twilio-signature"];
       const host = PUBLIC_HOST || `https://${req.headers.host}`;
-      const fullUrl = `${host.replace(/\/$/, "")}/voice`;
+      const base = `${host.replace(/\/$/, "")}/voice`;
+
+      // Twilio signs the URL exactly as it requested it. Behind a tunnel or a
+      // proxy that can differ from what we think our own URL is — most often by
+      // a trailing slash or by the original request carrying a query string —
+      // so try the plausible spellings rather than rejecting a legitimate call.
+      const candidates = [base, `${base}/`, req.url ? `${host.replace(/\/$/, "")}${req.url}` : base];
       const valid =
-        typeof signature === "string" && twilio.validateRequest(TWILIO_AUTH_TOKEN, signature, fullUrl, params);
+        typeof signature === "string" &&
+        candidates.some((u) => twilio.validateRequest(TWILIO_AUTH_TOKEN, signature, u, params));
+
       if (!valid) {
-        log(`rejected unsigned request to /voice (expected url ${fullUrl})`);
+        log(
+          `rejected /voice — signature ${signature ? "present but no candidate URL matched" : "MISSING"}; ` +
+            `tried ${candidates.join(" , ")}; params=${Object.keys(params).join(",") || "(none)"}`,
+        );
         res.writeHead(403).end("Invalid Twilio signature");
         return;
       }

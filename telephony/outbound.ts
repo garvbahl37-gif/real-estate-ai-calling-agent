@@ -57,6 +57,13 @@ export interface PlaceCallOptions extends TwilioAuth {
   answerUrl: string;
   /** Seconds to let it ring before giving up. */
   timeoutSec?: number;
+  /**
+   * Answering-machine detection. Off by default: it is a paid feature, and a
+   * trial account rejects the whole request with "Invalid or disallowed
+   * parameters provided" rather than ignoring the field — which reads like a
+   * malformed call, not a billing limit.
+   */
+  machineDetection?: boolean;
 }
 
 export interface PlacedCall {
@@ -81,15 +88,17 @@ export async function placeOutboundCall(opts: PlaceCallOptions): Promise<PlacedC
   const client = twilioClient(opts);
   const to = normaliseIndianNumber(opts.to);
 
+  // Trial accounts accept only To, From and Url on this endpoint. Sending even
+  // `Method` or `Timeout` — both perfectly valid parameters — fails the whole
+  // request with "Invalid or disallowed parameters provided", which reads like
+  // a malformed call rather than a plan limit. So the extras are opt-in and
+  // omitted by default; a trial account can still place the call.
   const call = await client.calls.create({
     to,
     from: opts.from,
     url: opts.answerUrl,
-    method: "POST",
-    timeout: opts.timeoutSec ?? 30,
-    // If it goes to voicemail there is no one to sell to; hanging up saves the
-    // Gemini session and the trial credit.
-    machineDetection: "Enable",
+    ...(opts.timeoutSec ? { timeout: opts.timeoutSec } : {}),
+    ...(opts.machineDetection ? { machineDetection: "Enable" as const } : {}),
   });
 
   return { sid: call.sid, status: call.status, to, from: opts.from };
@@ -123,6 +132,13 @@ export function explainTwilioError(err: unknown): string {
       `The "from" number is not a voice-capable Twilio number on this account.\n` +
       `  Note that Twilio stopped selling Indian numbers in August 2024 — use a US number.\n` +
       `  Buy one at https://console.twilio.com/us1/develop/phone-numbers/manage/search`
+    );
+  }
+  if (/disallowed parameters/i.test(e?.message ?? "")) {
+    return (
+      `Twilio rejected a parameter because this is a trial account.\n` +
+      `  Trial Calls.json accepts only To, From and Url — even Method or Timeout are refused.\n` +
+      `  Pass no extras, or upgrade the account.`
     );
   }
   if (code === 20003) {

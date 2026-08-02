@@ -202,8 +202,16 @@ pnpm twilio:call 9810012345       # Priya rings that number
 
 For inbound instead, point the number's Voice webhook at `https://<your-tunnel>/voice` (HTTP POST).
 
-Three account facts that are easy to lose an hour to:
+Four account facts that are easy to lose an hour to:
 
+- **A Twilio *trial* account cannot use `<Connect><Stream>`.** This is the one that actually stops
+  the phone demo. The webhook is fetched and answered `200`, then Twilio silently never opens the
+  WebSocket and drops the call after ~3 s. Nothing is logged where you can read it — Alerts are
+  themselves restricted on a trial. Diagnosed by placing two calls that differed only in TwiML:
+  `<Say>` ran for 12 s, `<Connect><Stream>` died at 3 s. Upgrading the account unlocks it.
+- **Trial `Calls.json` accepts only `To`, `From` and `Url`.** Sending `Method` or `Timeout` — both
+  documented, valid parameters — fails the whole request with "Invalid or disallowed parameters
+  provided", which reads like a malformed request rather than a plan limit.
 - **Twilio stopped selling Indian numbers in August 2024.** Use a US number — it can still call +91.
 - **India is disabled by default** under Voice → Geo Permissions on new accounts.
 - **A Restricted API key returns `20003 "Policy evaluation failed"`** for permissions it lacks, which
