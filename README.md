@@ -5,8 +5,14 @@ qualifies their requirement, answers questions from a fixed project catalogue, a
 lead in a CRM.
 
 **Live demo → https://real-estate-ai-calling-agent.vercel.app/call**
+**Video walkthrough → https://youtu.be/wra1p1eUkLs**
 
 Press *Start the call*, allow the microphone, and talk. Interrupt her whenever you like.
+
+![The call console mid-conversation](docs/screenshots/03-live-call.png)
+*A live call. The transcript streams on the left; the lead record on the right fills in through tool
+calls while she is still speaking.*
+
 
 | | |
 |---|---|
@@ -16,48 +22,124 @@ Press *Start the call*, allow the microphone, and talk. Interrupt her whenever y
 | Project catalogue | https://real-estate-ai-calling-agent.vercel.app/projects |
 | Architecture write-up | https://real-estate-ai-calling-agent.vercel.app/how-it-works |
 | System health | https://real-estate-ai-calling-agent.vercel.app/api/health |
+| Video walkthrough | https://youtu.be/wra1p1eUkLs |
 | Source | https://github.com/garvbahl37-gif/real-estate-ai-calling-agent |
 
 Everything runs on free tiers — Gemini Developer API, Vercel Hobby, Neon Postgres.
 
 ---
 
-## What it actually does
+## How she sounds
 
-A recorded 93-second call from the production deployment:
+Three clips from a real call. Both voices are on the recording — the agent and the caller —
+captured by the app itself rather than by a screen recorder.
+
+| Clip | What it shows | |
+|---|---|---|
+| [Opening, Hinglish](docs/audio/hinglish-opening.mp3) | She opens the call unprompted, asks permission, then intent | 26 s |
+| [Qualifying, Hinglish](docs/audio/hinglish-qualifying.mp3) | Budget, configuration and location captured conversationally | 30 s |
+| [Same agent, English](docs/audio/english-conversation.mp3) | The caller speaks English; she stays in English | 32 s |
+
+GitHub does not play audio inline — click a link to download or open it.
+
+### The register she is aiming for
+
+The language policy in [`src/lib/agent-prompt.ts`](src/lib/agent-prompt.ts) specifies the *register*,
+not just the language. Naming "Hinglish" is not enough; the prompt carries worked examples of what
+good and bad sound like.
+
+```
+Good — copy this register
+  ✓ "Sir, aapka budget kya rakha hai — around one crore ya usse thoda upar?"
+  ✓ "Bilkul, Sector 150 mein 3BHK available hai. Possession December 2027 hai."
+  ✓ "Ye investment ke liye dekh rahe hain ya khud rehne ke liye?"
+
+Bad — never
+  ✗ "मैं आपको सूचित करना चाहती हूँ कि..."   (reads like a government notice)
+  ✗ "Kripya apna bajat batayein"            (nobody says "bajat")
+  ✗ Announcing the language: "I will now speak in Hindi."
+```
+
+Numbers are spoken the Indian way — "ek crore bees lakh", "saade teen crore" — never "one hundred
+and twenty lakhs". English stays English for the words nobody translates: *budget, possession, loan,
+carpet area, ready-to-move, site visit, 2BHK, registry, sector*.
+
+---
+
+## A real call, end to end
+
+Verbatim from the deployed app. The caller changes their budget mid-call, which is the thing an
+interviewer will actually test.
 
 ```
 Priya   Namaste! Main Priya bol rahi hoon Aarambh Realty se — do minute baat kar sakte hain?
 Caller  Main investment ke liye dekh raha hoon, Noida mein
-Priya   Investment ke liye dekh rahe hain, bahut achha. Noida mein kis locality mein prefer
-        karenge, aur aapka budget kya rahega? Around one crore ya usse thoda upar?
+Priya   Achha, investment ke liye Noida mein badhiya choice hai. Kis type ki property dekh
+        rahe hain — apartment, plot ya commercial?
 Caller  3BHK chahiye, budget around 1.5 crore tak
-Priya   Achha, 1.5 crore tak ka budget hai. Noida mein Sector 150 achha option ho sakta hai…
+Priya   Theek hai, 3BHK 1.5 crore tak. Noida mein specific koi location preference hai?
 Caller  Possession kab tak hai? Aur RERA registered hai kya?
-Priya   Haan, project RERA registered hai, aur possession iska December 2027 tak expected hai.
+Priya   Haanji, Aarambh Skyline Greens Sector 150 mein hai, uska possession December 2027
+        tak hai. Aur haan, ye RERA registered project hai.
 Caller  Actually budget badha ke 2.5 crore kar dete hain, ready to move chahiye
-Priya   Achha, budget aapne 2.5 crore kar diya hai, aur ready to move chahiye. Is budget mein
-        Noida Sector 128 mein humaare paas Riverfront Residences hai. OC aa chuka hai, matlab
-        immediate registry ho sakti hai.
+Priya   Achha, budget 2.5 crore tak hai aur ready to move chahiye, got it. Is situation mein
+        Aarambh Riverside Indirapuram ek option ho sakta hai — 3BHK aur 4BHK available hain,
+        aur ready to move hai.
 Caller  Theek hai. Mera naam Rahul Verma hai, number 9810012345
 Caller  Haan site visit kar lete hain, Saturday morning
-Priya   Perfect, Rahul ji. Saturday morning Riverfront Residences ki visit fix ho gayi hai.
+Priya   Perfect hai, Saturday morning ka site visit done hai. Sales team aapko location pin
+        bhi bhej degi. Thank you so much for calling! Have a great day.
 ```
 
-That call produced **10 tool calls** and this CRM record, written to Postgres:
+Two things worth noticing. She **re-ran the project search** when the budget changed and moved off
+Skyline Greens. And she picked Riverside Indirapuram over the more obvious "premium" option, because
+Riverfront Residences *starts* at ₹3.2 Cr — above the stated budget. The matcher is scoring fit, not
+upselling.
+
+That call produced this CRM record, written to Postgres:
 
 ```
-HEADLINE  3BHK Noida Sector 128, 2.5Cr, investment, ready-to-move, site visit Saturday
-SCORE     95  hot
-LANGUAGES Hindi, Hinglish, English
-OBJECTION "Wants ready to move, did not want to wait for December 2027 possession"
-NEXT      Send the WhatsApp location pin for Riverfront Residences in Sector 128 and call
-          Friday evening to confirm the Saturday morning site visit.
+HEADLINE   3BHK Noida, ~2.5Cr, investment, ready-to-move, site visit booked for Saturday morning
+SCORE      95  hot
+LANGUAGES  Hindi, Hinglish, English
+OBJECTION  "Wants ready to move, did not want to wait for December 2027 possession"
+NEXT       Send the location pin on WhatsApp and call to confirm the Saturday morning site visit.
 ```
 
-Note what happened when the budget changed mid-call: she re-ran the project search and switched from
-an under-construction project to a ready-to-move one, and the captured budget was **overwritten**
-rather than appended.
+### When the line is bad
+
+Recorded in a noisy room, where the microphone picked up an unrelated conversation:
+
+```
+Caller  क्या आपको पुराने वाला तो होगा? माय डिप्पे
+Priya   Sorry sir, aapki awaaz break ho rahi hai. Kya aap ek baar phir se bata sakte hain?
+Caller  इमेज ही नहीं जा रही, लोगो ही नहीं जा रहा।
+Priya   Awaaz clear nahi aa rahi sir.
+```
+
+She asks for a repeat rather than inventing a reply to something nobody said — which is what the
+recovery section of the prompt is for.
+
+---
+
+## The interface
+
+| | |
+|---|---|
+| ![Landing](docs/screenshots/01-landing.png) | ![Call setup](docs/screenshots/02-call-setup.png) |
+| **Landing.** The hero is a real transcript excerpt, not stock copy. | **Call setup.** Language, voice, model, and free-text instructions that change her flow for one call. |
+| ![Projects](docs/screenshots/05-projects-ladder.png) | ![Project detail](docs/screenshots/06-project-detail.png) |
+| **The catalogue, on a budget axis.** Every project's price band on one log scale — you can see why ₹1.5 Cr and ₹2.5 Cr reach different projects. | **One project.** What `get_project_details` returns when a caller asks something specific. |
+| ![Leads](docs/screenshots/08-leads.png) | ![Lead detail](docs/screenshots/09-lead-detail.png) |
+| **Leads.** Every call, scored. | **A lead.** Summary, objections, next action, the full transcript, and every tool call. |
+
+![Call summary](docs/screenshots/04-call-summary.png)
+*The post-call summary — headline, qualification score with reasoning, objections raised, and the
+one concrete next step for a human.*
+
+![Architecture](docs/screenshots/07-architecture.png)
+*`/how-it-works` documents the signal path, the stack, and the problems that were not in any
+documentation.*
 
 ---
 
@@ -364,7 +446,7 @@ Voice Demo Link       : https://real-estate-ai-calling-agent.vercel.app/call
 Calling Number        : see "Phone calls" above — the bridge is built and verified;
                         it activates on any Twilio number by pointing that number's
                         Voice webhook at /voice
-Video Demo Link       : (to be recorded)
+Video Demo Link       : https://youtu.be/wra1p1eUkLs
 GitHub                : https://github.com/garvbahl37-gif/real-estate-ai-calling-agent
 Tools Used            : Gemini Live API (gemini-3.1-flash-live-preview) · Gemini 3.5 Flash ·
                         Next.js 16 · TypeScript · Tailwind 4 · Web Audio API AudioWorklets ·

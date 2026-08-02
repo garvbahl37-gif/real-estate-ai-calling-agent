@@ -15,7 +15,8 @@
     "twilio:check": "tsx scripts/twilio-doctor.mts",
     "twilio:call": "tsx scripts/call-me.mts",
     "demo:title": "tsx scripts/render-title.mts",
-    "demo:video": "tsx scripts/build-demo-video.mts"
+    "demo:video": "tsx scripts/build-demo-video.mts",
+    "demo:screenshots": "node scripts/capture-screenshots.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",
