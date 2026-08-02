@@ -168,6 +168,24 @@ export interface ToolExecutionResult {
   endCall?: { outcome: string; reason?: string };
 }
 
+/**
+ * Words that appear in almost every Delhi-NCR address and therefore carry no
+ * discriminating information on their own.
+ */
+const GENERIC_PLACE_WORDS = new Set([
+  "sector",
+  "block",
+  "phase",
+  "extension",
+  "area",
+  "road",
+  "near",
+  "the",
+  "and",
+  "plot",
+  "pocket",
+]);
+
 function scoreProject(
   p: Project,
   args: {
@@ -251,14 +269,26 @@ function scoreProject(
     }
   }
 
-  // Location: loose substring match both directions so "Sector 150", "150",
-  // "Noida Expressway" and "noida" all hit.
+  // Location: loose enough that "Sector 150", "150", "Noida Expressway" and
+  // "noida" all hit, strict enough that they hit the RIGHT projects.
+  //
+  // The subtlety is the token fallback. Matching any word longer than two
+  // characters means "Sector 150" matches every project whose address contains
+  // the word "sector" — which is all of them. So generic address words are
+  // dropped, and when the caller names a number that number has to be present.
   if (args.locations?.length) {
     const hay = `${p.locality} ${p.city} ${p.microMarket} ${p.name}`.toLowerCase();
     const hits = args.locations.filter((raw) => {
       const l = raw.toLowerCase().trim();
       if (!l) return false;
-      return hay.includes(l) || l.split(/\s+/).some((tok) => tok.length > 2 && hay.includes(tok));
+      if (hay.includes(l)) return true;
+
+      // "Sector 150" must not match Sector 143B.
+      const numbers = l.match(/\d+[a-z]?/g);
+      if (numbers?.length) return numbers.some((n) => hay.includes(n));
+
+      const tokens = l.split(/\s+/).filter((t) => t.length > 2 && !GENERIC_PLACE_WORDS.has(t));
+      return tokens.some((t) => hay.includes(t));
     });
     if (hits.length) {
       score += 30;

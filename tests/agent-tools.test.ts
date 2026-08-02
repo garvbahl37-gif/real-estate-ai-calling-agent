@@ -50,9 +50,36 @@ describe("search_projects", () => {
     assert.equal(rich.results[0].projectId, "riverfront-residences");
   });
 
-  it("finds the entry-level project for a first-time buyer", () => {
+  it("finds an entry-level apartment for a first-time buyer", () => {
     const r = search({ budgetMaxInr: 60 * L, configurations: ["2BHK"], propertyType: "apartment" });
-    assert.equal(r.results[0].projectId, "urbania");
+    // Several projects now sit in this band; the top match must be one of the
+    // genuinely entry-level ones, not a premium project scraping the ceiling.
+    assert.ok(
+      ["sunrise-heights", "urbania", "knowledge-park-residency"].includes(r.results[0].projectId),
+      `unexpected top match: ${r.results[0].projectId}`,
+    );
+    assert.ok(r.results[0].fitScore > 0);
+  });
+
+  it("does not let the word 'sector' match every project in NCR", () => {
+    // "Sector 150" once matched Sector 143B, Sector 128 and everything else,
+    // because the token fallback accepted the bare word "sector".
+    const r = search({ locations: ["Sector 150"], configurations: ["3BHK"], budgetMaxInr: 1.5 * CR });
+    assert.equal(r.results[0].projectId, "skyline-greens");
+    const meadows = r.results.find((x) => x.projectId === "meadows");
+    if (meadows) {
+      assert.ok(
+        meadows.caveats.some((c) => /Sector 150/i.test(c)),
+        "Sector 143B should be flagged as a location mismatch for a Sector 150 request",
+      );
+    }
+  });
+
+  it("still matches a location named without a number", () => {
+    for (const q of ["Noida Expressway", "Indirapuram", "Greater Noida West", "Knowledge Park"]) {
+      const r = search({ locations: [q] });
+      assert.ok(r.results[0].fitScore > 0, `"${q}" produced no positive match`);
+    }
   });
 
   it("returns plots when the caller wants land, not flats", () => {

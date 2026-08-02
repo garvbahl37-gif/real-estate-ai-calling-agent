@@ -60,6 +60,15 @@ export class PhoneCallBridge {
 
   private persistTimer?: NodeJS.Timeout;
 
+  // Twilio buffers whatever we send it, so the bridge has no local queue to
+  // watch. `mark` messages are the acknowledgement: Twilio echoes one back once
+  // the audio preceding it has actually been played to the caller. Tracking the
+  // outstanding marks is how we know she has stopped speaking.
+  private markSeq = 0;
+  private pendingMarks = new Set<string>();
+  private pendingEnd?: string;
+  private endHardTimer?: NodeJS.Timeout;
+
   constructor(twilio: WebSocket, opts: BridgeOptions) {
     this.twilio = twilio;
     this.opts = opts;
@@ -85,6 +94,7 @@ export class PhoneCallBridge {
       event: string;
       start?: { streamSid: string; callSid: string; customParameters?: Record<string, string> };
       media?: { payload: string };
+      mark?: { name: string };
     };
     try {
       msg = JSON.parse(raw);
@@ -123,6 +133,20 @@ export class PhoneCallBridge {
           });
         } catch {
           /* socket closing; the close handler deals with it */
+        }
+        break;
+      }
+
+      case "mark": {
+        const name = msg.mark?.name;
+        if (name) this.pendingMarks.delete(name);
+        // Everything we queued has now been heard. If a hang-up was waiting on
+        // her closing line, it is finally safe.
+        if (this.pendingEnd && this.pendingMarks.size === 0) {
+          const reason = this.pendingEnd;
+          this.pendingEnd = undefined;
+          this.log("closing line finished playing — hanging up");
+          await this.shutdown(reason);
         }
         break;
       }
@@ -183,8 +207,16 @@ export class PhoneCallBridge {
         this.log(`tool ${name}`);
 
         if (result.endCall) {
-          // Let the closing line play out before dropping the line.
-          setTimeout(() => void this.shutdown(result.endCall!.outcome), 4000);
+          // Never hang up on a timer. Her sign-off — repeating the number back,
+          // confirming the next step — often runs 15 seconds or more, and a
+          // fixed delay cuts it off mid-sentence. Wait for Twilio to confirm it
+          // has played, with a backstop for a mark that never comes back.
+          this.pendingEnd = result.endCall.outcome;
+          this.log("end_call — hanging up once Twilio has played her closing line");
+          this.endHardTimer = setTimeout(() => {
+            this.log("closing line exceeded 45s — ending anyway");
+            void this.shutdown(result.endCall!.outcome);
+          }, 45_000);
         }
         return { id: fc.id, name: fc.name, response: result.response };
       });
@@ -204,6 +236,8 @@ export class PhoneCallBridge {
     // long as the buffer lasts.
     if (sc.interrupted) {
       this.sendToTwilio({ event: "clear", streamSid: this.streamSid });
+      // `clear` discards Twilio's buffer, so those marks are never coming back.
+      this.pendingMarks.clear();
       this.outboundTail = Buffer.alloc(0);
       this.downsampleCarry = [];
       this.finalizeAgent();
@@ -246,6 +280,12 @@ export class PhoneCallBridge {
         streamSid: this.streamSid,
         media: { payload: frame.toString("base64") },
       });
+    }
+
+    if (frames.length) {
+      const name = `m${++this.markSeq}`;
+      this.pendingMarks.add(name);
+      this.sendToTwilio({ event: "mark", streamSid: this.streamSid, mark: { name } });
     }
   }
 
@@ -368,6 +408,8 @@ export class PhoneCallBridge {
     this.log(`shutting down (${reason})`);
 
     if (this.persistTimer) clearInterval(this.persistTimer);
+    if (this.endHardTimer) clearTimeout(this.endHardTimer);
+    this.pendingEnd = undefined;
     this.finalizeCustomer();
     this.finalizeAgent();
 

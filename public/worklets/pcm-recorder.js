@@ -17,10 +17,16 @@ class PCMRecorderProcessor extends AudioWorkletProcessor {
     super();
     this._buf = new Int16Array(CHUNK_SAMPLES);
     this._n = 0;
+    this._sumSq = 0;
     this._muted = false;
     this.port.onmessage = (e) => {
       if (e.data && e.data.type === "mute") this._muted = !!e.data.value;
     };
+  }
+
+  /** RMS of the chunk currently being filled, in the original float domain. */
+  _chunkRms() {
+    return Math.sqrt(this._sumSq / CHUNK_SAMPLES);
   }
 
   process(inputs) {
@@ -31,6 +37,7 @@ class PCMRecorderProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < channel.length; i++) {
       const sample = channel[i];
       sumSquares += sample * sample;
+      this._sumSq += sample * sample;
 
       // Clamp before scaling; a sample slightly outside [-1,1] wraps to the
       // opposite rail as an Int16 and produces an audible click.
@@ -39,10 +46,14 @@ class PCMRecorderProcessor extends AudioWorkletProcessor {
 
       if (this._n === CHUNK_SAMPLES) {
         if (!this._muted) {
+          // The chunk's own RMS travels with it. The main thread gates on this:
+          // sending near-silence to the model makes it hallucinate words out of
+          // room tone, which then appear as phantom caller turns.
           const copy = this._buf.slice();
-          this.port.postMessage({ type: "pcm", buffer: copy.buffer }, [copy.buffer]);
+          this.port.postMessage({ type: "pcm", buffer: copy.buffer, rms: this._chunkRms() }, [copy.buffer]);
         }
         this._n = 0;
+        this._sumSq = 0;
       }
     }
 

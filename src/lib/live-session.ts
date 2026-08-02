@@ -50,6 +50,15 @@ interface TokenResponse {
   warning?: string;
 }
 
+/**
+ * Noise-gate tuning. ABSOLUTE_NOISE_FLOOR is a hard minimum in normalised RMS —
+ * ordinary speech at a normal distance sits well above it, while a quiet room
+ * sits below. The hangover keeps the gate open across the short gaps inside a
+ * sentence.
+ */
+const ABSOLUTE_NOISE_FLOOR = 0.006;
+const GATE_HANGOVER_MS = 900;
+
 const MAX_RECONNECTS = 3;
 const MAX_TOTAL_RECONNECTS = 8;
 
@@ -122,8 +131,17 @@ export class LiveCall {
 
   private micLevel = 0;
   private agentLevel = 0;
+  private noiseFloor = ABSOLUTE_NOISE_FLOOR;
+  private gateOpenUntil = 0;
   private levelRaf?: number;
   private endCallTimer?: ReturnType<typeof setTimeout>;
+
+  // Hanging up after end_call waits for her to actually stop speaking, rather
+  // than after a guessed delay. `playerBusy` mirrors the playback worklet's
+  // queue; `pendingEnd` holds the outcome until it is safe to tear down.
+  private playerBusy = false;
+  private pendingEnd?: { reason: string; sawTurnComplete: boolean };
+  private endGraceTimer?: ReturnType<typeof setTimeout>;
 
   // Reconnection state. The handle lets a new socket pick up the same
   // conversation, so a dropped connection doesn't restart the sales call.
@@ -313,6 +331,44 @@ export class LiveCall {
     }
   }
 
+  /**
+   * Client-side noise gate. Nothing reaches the model unless it plausibly
+   * contains speech.
+   *
+   * The server's own VAD decides when a *turn* starts and ends, but it still
+   * transcribes whatever audio it is given — and given a couple of seconds of
+   * room tone, a fan, or a laptop's own speaker bleed, it will confidently
+   * invent a sentence. Those arrive as phantom caller turns: a line nobody
+   * said, which the agent then answers. Filtering at the source is the only
+   * place this can be fixed properly, because by the time the text comes back
+   * it is indistinguishable from real speech.
+   *
+   * The floor adapts, because a laptop in a quiet room and a phone in a cafe
+   * have very different baselines. It tracks the quiet passages quickly and
+   * loud ones barely at all, so sustained speech never raises the bar against
+   * itself.
+   *
+   * The hangover is what protects real speech: once the gate opens it stays
+   * open for a beat, so trailing consonants and the short pauses inside a
+   * sentence are not chopped out mid-word.
+   */
+  private passesNoiseGate(rms: number): boolean {
+    if (typeof rms !== "number" || Number.isNaN(rms)) return true; // no signal to judge on — let it through
+
+    // Adapt downward fast, upward slowly.
+    this.noiseFloor =
+      rms < this.noiseFloor ? this.noiseFloor * 0.9 + rms * 0.1 : this.noiseFloor * 0.995 + rms * 0.005;
+
+    const threshold = Math.max(ABSOLUTE_NOISE_FLOOR, this.noiseFloor * 2.5);
+    const now = performance.now();
+
+    if (rms > threshold) {
+      this.gateOpenUntil = now + GATE_HANGOVER_MS;
+      return true;
+    }
+    return now < this.gateOpenUntil;
+  }
+
   /* -------------------------------------------------------------- */
   /* Audio                                                           */
   /* -------------------------------------------------------------- */
@@ -351,6 +407,7 @@ export class LiveCall {
       const data = e.data;
       if (data.type === "pcm") {
         if (!this.session || this.closed) return;
+        if (!this.passesNoiseGate(data.rms as number)) return;
         try {
           this.session.sendRealtimeInput({
             audio: {
@@ -376,10 +433,15 @@ export class LiveCall {
     this.playerNode = new AudioWorkletNode(this.playContext, "pcm-player", { outputChannelCount: [1] });
     this.playerNode.port.onmessage = (e) => {
       const data = e.data;
-      if (data.type === "playing") this.setState("speaking");
-      else if (data.type === "drained") {
+      if (data.type === "playing") {
+        this.playerBusy = true;
+        this.setState("speaking");
+      } else if (data.type === "drained") {
+        this.playerBusy = false;
         if (this.state === "speaking") this.setState("listening");
         this.agentLevel = 0;
+        // She has stopped talking. If a hang-up was queued, this is the moment.
+        this.maybeFinishAfterSpeech();
       } else if (data.type === "level") this.agentLevel = data.rms;
     };
     this.playerNode.connect(this.playContext.destination);
@@ -447,6 +509,10 @@ export class LiveCall {
     if (sc.turnComplete) {
       this.finalizeCustomerTurn();
       this.finalizeAgentTurn();
+      if (this.pendingEnd) {
+        this.pendingEnd.sawTurnComplete = true;
+        this.maybeFinishAfterSpeech();
+      }
     }
   }
 
@@ -473,11 +539,18 @@ export class LiveCall {
       this.log(`🔧 ${name}(${JSON.stringify(args).slice(0, 160)})`);
 
       if (result.endCall) {
-        // Let the closing line play out, but not indefinitely. Tracked so a
-        // manual hang-up in the meantime doesn't leave a timer running against
-        // a torn-down session.
-        const reason = result.endCall.outcome;
-        this.endCallTimer = setTimeout(() => this.finish(reason), 3500);
+        // Do NOT hang up on a timer. Her closing line — repeating the number
+        // back, confirming the next step, signing off — routinely runs 15
+        // seconds or more, and a fixed delay guillotines it mid-sentence.
+        // Instead, remember the outcome and tear down once the model has
+        // finished the turn AND the playback queue has actually drained.
+        // The timer here is only a backstop for a turn that never completes.
+        this.pendingEnd = { reason: result.endCall.outcome, sawTurnComplete: false };
+        this.log("end_call — hanging up once she has finished speaking");
+        this.endCallTimer = setTimeout(() => {
+          this.log("closing line exceeded 45s — ending anyway");
+          this.finish(result.endCall!.outcome);
+        }, 45_000);
       }
 
       return { id: fc.id, name: fc.name, response: result.response };
@@ -488,6 +561,23 @@ export class LiveCall {
     } catch (err) {
       this.log(`Tool response failed: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  /**
+   * Ends the call once, and only once, both conditions hold: the model has
+   * finished generating the turn, and the playback queue is empty.
+   *
+   * The short grace period covers the gap between chunks — the queue can drain
+   * for a few milliseconds mid-sentence while the next packet is in flight, and
+   * hanging up there would clip her exactly as a fixed timer did.
+   */
+  private maybeFinishAfterSpeech() {
+    if (!this.pendingEnd?.sawTurnComplete || this.playerBusy) return;
+    if (this.endGraceTimer) clearTimeout(this.endGraceTimer);
+    this.endGraceTimer = setTimeout(() => {
+      if (!this.pendingEnd || this.playerBusy) return;
+      this.finish(this.pendingEnd.reason);
+    }, 600);
   }
 
   /* -------------------------------------------------------------- */
@@ -617,6 +707,10 @@ export class LiveCall {
     this.levelRaf = undefined;
     if (this.endCallTimer) clearTimeout(this.endCallTimer);
     this.endCallTimer = undefined;
+    if (this.endGraceTimer) clearTimeout(this.endGraceTimer);
+    this.endGraceTimer = undefined;
+    this.pendingEnd = undefined;
+    this.playerBusy = false;
 
     try {
       this.playerNode?.port.postMessage({ type: "flush" });
