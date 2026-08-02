@@ -56,6 +56,38 @@ const MAX_TOTAL_RECONNECTS = 8;
 let turnSeq = 0;
 const nextId = () => `t${++turnSeq}_${Math.random().toString(36).slice(2, 7)}`;
 
+// CJK, Hangul, Cyrillic, Arabic, Thai — scripts this agent never legitimately
+// produces. It is configured for hi-IN and en-IN only.
+const FOREIGN_SCRIPT =
+  /[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯Ѐ-ӿ؀-ۿ฀-๿]/;
+
+/**
+ * Defensive net behind the `languageCodes` pin in the session config.
+ *
+ * Transcription is constrained to Hindi and English, but the ASR can still emit
+ * a burst of an unrelated script when it hallucinates on background noise —
+ * Chinese characters being the observed failure. Anything that is mostly such a
+ * script is not something the caller said, so it never reaches the transcript,
+ * the CRM, or the summariser.
+ *
+ * Deliberately proportional rather than absolute: a stray character inside an
+ * otherwise good sentence is kept, since dropping real speech is worse than
+ * showing one odd glyph.
+ */
+export function isHallucinatedScript(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  let foreign = 0;
+  let letters = 0;
+  for (const ch of trimmed) {
+    if (/\s|\p{P}|\p{N}/u.test(ch)) continue;
+    letters++;
+    if (FOREIGN_SCRIPT.test(ch)) foreign++;
+  }
+  if (letters === 0) return false;
+  return foreign / letters > 0.5;
+}
+
 /**
  * Owns one voice conversation: microphone capture, the Live API socket, tool
  * execution, transcript assembly and reconnection.
@@ -91,6 +123,7 @@ export class LiveCall {
   private micLevel = 0;
   private agentLevel = 0;
   private levelRaf?: number;
+  private endCallTimer?: ReturnType<typeof setTimeout>;
 
   // Reconnection state. The handle lets a new socket pick up the same
   // conversation, so a dropped connection doesn't restart the sales call.
@@ -440,9 +473,11 @@ export class LiveCall {
       this.log(`🔧 ${name}(${JSON.stringify(args).slice(0, 160)})`);
 
       if (result.endCall) {
-        // Let the closing line finish playing before tearing the socket down.
+        // Let the closing line play out, but not indefinitely. Tracked so a
+        // manual hang-up in the meantime doesn't leave a timer running against
+        // a torn-down session.
         const reason = result.endCall.outcome;
-        setTimeout(() => this.finish(reason), 3500);
+        this.endCallTimer = setTimeout(() => this.finish(reason), 3500);
       }
 
       return { id: fc.id, name: fc.name, response: result.response };
@@ -460,6 +495,10 @@ export class LiveCall {
   /* -------------------------------------------------------------- */
 
   private appendCustomerText(text: string, languageCode?: string) {
+    if (isHallucinatedScript(text)) {
+      this.log(`Dropped a non-Hindi/English transcription fragment: ${JSON.stringify(text.slice(0, 40))}`);
+      return;
+    }
     // The agent replying means the caller's turn has ended.
     if (this.openAgentTurn) this.finalizeAgentTurn();
     if (!this.openCustomerTurn) {
@@ -472,6 +511,10 @@ export class LiveCall {
   }
 
   private appendAgentText(text: string, languageCode?: string) {
+    if (isHallucinatedScript(text)) {
+      this.log(`Dropped a non-Hindi/English agent fragment: ${JSON.stringify(text.slice(0, 40))}`);
+      return;
+    }
     if (this.openCustomerTurn) this.finalizeCustomerTurn();
     if (!this.openAgentTurn) {
       this.openAgentTurn = { id: nextId(), role: "agent", text: "", at: this.elapsedMs, partial: true };
@@ -542,32 +585,72 @@ export class LiveCall {
   private finish(reason: string) {
     if (this.closed) return;
     this.closed = true;
-    this.finalizeCustomerTurn();
-    this.finalizeAgentTurn();
+
+    // Silence first, UI second. If any of the bookkeeping below throws, the
+    // call is already quiet — hanging up must never depend on a clean teardown.
+    this.stopAudioNow();
+
+    try {
+      this.finalizeCustomerTurn();
+      this.finalizeAgentTurn();
+    } catch {
+      /* transcript bookkeeping is not worth failing a hang-up over */
+    }
+
     this.setState("ended");
     void this.teardown();
     this.events.onEnded?.(reason);
   }
 
-  private async teardown() {
+  /**
+   * Order matters here.
+   *
+   * Everything that silences the call is done synchronously and first — drop
+   * the queued audio, disconnect the player, cut the mic. Only then do we touch
+   * anything that can block: closing the WebSocket and the AudioContexts both
+   * return promises, and if either is slow the caller would keep hearing the
+   * agent talk for as long as it took. "End call" has to mean silence
+   * immediately, not silence eventually.
+   */
+  private stopAudioNow() {
     if (this.levelRaf) cancelAnimationFrame(this.levelRaf);
     this.levelRaf = undefined;
+    if (this.endCallTimer) clearTimeout(this.endCallTimer);
+    this.endCallTimer = undefined;
+
+    try {
+      this.playerNode?.port.postMessage({ type: "flush" });
+      this.playerNode?.disconnect();
+    } catch {
+      /* node already torn down */
+    }
+    try {
+      this.recorderNode?.port.postMessage({ type: "mute", value: true });
+      this.recorderNode?.disconnect();
+      this.micSource?.disconnect();
+      this.micStream?.getTracks().forEach((t) => t.stop());
+    } catch {
+      /* already stopped */
+    }
+
+    this.micLevel = 0;
+    this.agentLevel = 0;
+    this.events.onLevel?.(0, 0);
+  }
+
+  private async teardown() {
+    this.stopAudioNow();
+
     try {
       this.session?.close();
     } catch {
       /* already gone */
     }
     this.session = undefined;
-    this.playerNode?.port.postMessage({ type: "flush" });
-    this.micStream?.getTracks().forEach((t) => t.stop());
-    this.recorderNode?.disconnect();
-    this.micSource?.disconnect();
-    this.playerNode?.disconnect();
+
     await this.micContext?.close().catch(() => {});
     await this.playContext?.close().catch(() => {});
     this.micContext = undefined;
     this.playContext = undefined;
-    this.micLevel = 0;
-    this.agentLevel = 0;
   }
 }

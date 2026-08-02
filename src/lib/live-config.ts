@@ -1,4 +1,4 @@
-import { Modality, type LiveConnectConfig } from "@google/genai";
+import { EndSensitivity, Modality, StartSensitivity, type LiveConnectConfig } from "@google/genai";
 import { AGENT_FUNCTION_DECLARATIONS } from "./agent-tools";
 import { DEFAULT_VOICE, buildSystemInstruction, type PromptOptions } from "./agent-prompt";
 
@@ -22,6 +22,47 @@ import { DEFAULT_VOICE, buildSystemInstruction, type PromptOptions } from "./age
  * The Twilio bridge builds the same config and passes it directly, because it
  * connects with the raw API key server-side and has no token in between.
  */
+/**
+ * Terms a general-purpose ASR reliably mangles and this agent cannot afford to
+ * get wrong: sector numbers, unit configurations, Indian money units and the
+ * project names themselves.
+ */
+const SPEECH_VOCABULARY = [
+  "Aarambh Realty",
+  "Skyline Greens",
+  "Riverfront Residences",
+  "Urbania",
+  "Green Acres",
+  "Sector 150",
+  "Sector 128",
+  "Sector 16B",
+  "Noida Expressway",
+  "Greater Noida West",
+  "Yamuna Expressway",
+  "Jewar Airport",
+  "Noida Extension",
+  "1BHK",
+  "2BHK",
+  "3BHK",
+  "4BHK",
+  "5BHK",
+  "lakh",
+  "crore",
+  "carpet area",
+  "saleable area",
+  "possession",
+  "RERA",
+  "ready to move",
+  "under construction",
+  "site visit",
+  "booking amount",
+  "home loan",
+  "EMI",
+  "registry",
+  "clubhouse",
+  "subvention",
+];
+
 export interface LiveConfigOptions extends PromptOptions {
   voice?: string;
   /** Resume an interrupted conversation instead of starting a new one. */
@@ -48,18 +89,41 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
 
     // Both directions transcribed: the console renders a live bilingual
     // transcript from this, and the summariser needs real text to work from.
-    inputAudioTranscription: {},
-    outputAudioTranscription: {},
+    //
+    // `languageCodes` is not optional in practice. Left empty, transcription
+    // falls back to automatic language detection, and on Hindi speech — or on
+    // room noise — that detector drifts to entirely unrelated scripts. In
+    // testing it produced Chinese characters for a caller speaking Hindi, and
+    // invented a full Devanagari sentence out of near-silence. Pinning the
+    // languages removes the guesswork.
+    inputAudioTranscription: {
+      languageCodes: ["hi-IN", "en-IN"],
+      // Sector numbers, configurations and Indian money units are exactly what
+      // a general ASR mangles, and exactly what has to be right on a sales call.
+      customVocabulary: SPEECH_VOCABULARY,
+    },
+    outputAudioTranscription: { languageCodes: ["hi-IN", "en-IN"] },
 
     tools: [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }],
 
     realtimeInputConfig: {
       automaticActivityDetection: {
-        // A buyer pauses mid-sentence doing arithmetic on a budget. The default
-        // end-of-speech window cuts them off, so widen it — more so on a phone
-        // line, where the codec and network add their own gaps.
-        silenceDurationMs: channel === "phone" ? 900 : 700,
-        prefixPaddingMs: 200,
+        // The Live API defaults to START_SENSITIVITY_HIGH — "detect the start of
+        // speech more often". On a real microphone in a real room that means a
+        // fan, a keyboard or traffic gets committed as a user turn, the ASR
+        // hallucinates words out of it, and the agent answers something nobody
+        // said. Two symptoms, one cause: junk text in the transcript, and a call
+        // that will not wind down because the agent keeps replying to phantoms.
+        startOfSpeechSensitivity: StartSensitivity.START_SENSITIVITY_LOW,
+        // Ending a turn less eagerly, for the same reason in reverse: a buyer
+        // pausing mid-sentence to do arithmetic on a budget should not be cut off.
+        endOfSpeechSensitivity: EndSensitivity.END_SENSITIVITY_LOW,
+        // A phone line adds codec and network gaps on top of the human ones.
+        silenceDurationMs: channel === "phone" ? 1100 : 800,
+        // Require a bit more sustained sound before opening a turn. Raising this
+        // is the single most effective guard against a short noise burst being
+        // treated as speech.
+        prefixPaddingMs: 300,
       },
     },
 
