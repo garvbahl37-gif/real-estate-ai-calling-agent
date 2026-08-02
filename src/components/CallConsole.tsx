@@ -6,7 +6,7 @@ import { LeadPanel } from "@/components/LeadPanel";
 import { Shirorekha } from "@/components/Shirorekha";
 import { Transcript } from "@/components/Transcript";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
-import { DEFAULT_LIVE_MODEL, LIVE_MODELS } from "@/lib/models";
+import { DEFAULT_LIVE_MODEL } from "@/lib/models";
 import { LiveCall, type CallState } from "@/lib/live-session";
 import { cn } from "@/lib/cn";
 import type { CallSummary, LeadRequirements, ToolInvocation, TranscriptTurn } from "@/lib/types";
@@ -59,7 +59,6 @@ export function CallConsole() {
 
   // Setup form
   const [voice, setVoice] = useState<string>(DEFAULT_VOICE);
-  const [model, setModel] = useState<string>(DEFAULT_LIVE_MODEL);
   const [language, setLanguage] = useState<OpeningLanguage>("hinglish");
   const [customerName, setCustomerName] = useState("");
   const [scenario, setScenario] = useState("");
@@ -194,12 +193,12 @@ export function CallConsole() {
     callRef.current = call;
     await call.start({
       voice,
-      model,
+      model: DEFAULT_LIVE_MODEL,
       openingLanguage: language,
       customerName: customerName.trim() || undefined,
       scenarioOverride: scenario.trim() || undefined,
     });
-  }, [voice, model, language, customerName, scenario, finaliseCall]);
+  }, [voice, language, customerName, scenario, finaliseCall]);
 
   const stop = useCallback(() => {
     void callRef.current?.stop("user_hangup");
@@ -231,10 +230,17 @@ export function CallConsole() {
 
   return (
     <div className="mx-auto w-full max-w-[1400px] px-5 sm:px-8">
-      {/* --- Live rule: the signature element ------------------------- */}
-      <div className="pt-6">
-        <Shirorekha levelsRef={levelsRef} active={active} height={64} />
-      </div>
+      {/* --- Live rule: the signature element -------------------------
+          Only rendered once a call exists. Idle it was a bare rule with empty
+          space above and below, which reads as a stray line rather than as the
+          instrument it becomes. */}
+      {state !== "idle" ? (
+        <div className="pt-6">
+          <Shirorekha levelsRef={levelsRef} active={active} height={64} />
+        </div>
+      ) : (
+        <div className="pt-10" />
+      )}
 
       {/* --- Status bar ---------------------------------------------- */}
       <div className="border-rule flex flex-wrap items-center gap-x-5 gap-y-2 border-b pt-1 pb-3">
@@ -393,27 +399,10 @@ export function CallConsole() {
               </select>
             </label>
 
-            <label className="mt-4 block">
-              <span className="text-ink-2 mb-1.5 block text-[12px] font-semibold">Model</span>
-              <select
-                value={model}
-                onChange={(e) => setModel(e.target.value)}
-                className="border-rule bg-paper text-ink focus:border-ink min-h-11 w-full rounded-sm border px-3 text-[13px] outline-none"
-              >
-                {LIVE_MODELS.map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label} — {m.note}
-                  </option>
-                ))}
-              </select>
-              <span className="text-ink-3 mt-1.5 block text-[11.5px] leading-relaxed">
-                All are native speech-to-speech and free on the Gemini free tier.
-              </span>
-            </label>
 
             <button
               onClick={() => setShowAdvanced((s) => !s)}
-              className="text-ink-3 hover:text-ink mt-5 font-mono text-[11px] tracking-[0.08em] uppercase transition-colors"
+              className="text-ink-3 hover:text-ink mt-5 inline-flex min-h-9 items-center font-mono text-[11px] tracking-[0.08em] uppercase transition-colors"
             >
               {showAdvanced ? "− " : "+ "}Change the flow
             </button>

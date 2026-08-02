@@ -34,7 +34,7 @@ export default async function ProjectDetail({ params }: { params: Promise<{ id: 
 
       <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 sm:px-8">
         <div className="shiro mt-10">
-          <Link href="/projects" className="eyebrow hover:text-ink transition-colors">
+          <Link href="/projects" className="eyebrow hover:text-ink inline-flex min-h-9 items-center transition-colors">
             ← All projects
           </Link>
 
@@ -66,8 +66,11 @@ export default async function ProjectDetail({ params }: { params: Promise<{ id: 
         </dl>
 
         <div className="mt-14 grid gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          {/* Left column */}
-          <div>
+          {/* Left column. min-w-0 is load-bearing: a grid child defaults to
+              min-width:auto, so the inventory table's min-w-[420px] would push
+              the column past a 390px viewport and the overflow-x-auto wrapper
+              inside it could never shrink to scroll. */}
+          <div className="min-w-0">
             <section className="shiro">
               <span className="eyebrow">Inventory</span>
               <div className="mt-3 overflow-x-auto">
@@ -135,7 +138,7 @@ export default async function ProjectDetail({ params }: { params: Promise<{ id: 
           </div>
 
           {/* Right column */}
-          <aside>
+          <aside className="min-w-0">
             <section className="shiro">
               <span className="eyebrow">Location advantages</span>
               <ul className="mt-3">

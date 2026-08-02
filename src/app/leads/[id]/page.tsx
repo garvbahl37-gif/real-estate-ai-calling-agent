@@ -60,7 +60,7 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
         <div className="shiro mt-10">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <Link href="/leads" className="eyebrow hover:text-ink transition-colors">
+              <Link href="/leads" className="eyebrow hover:text-ink inline-flex min-h-9 items-center transition-colors">
                 ← All leads
               </Link>
               <h1 className="font-display text-ink mt-2 text-[32px] leading-tight sm:text-[38px]">

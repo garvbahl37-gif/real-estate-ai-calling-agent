@@ -31,16 +31,29 @@ Everything runs on free tiers — Gemini Developer API, Vercel Hobby, Neon Postg
 
 ## How she sounds
 
-Three clips from a real call. Both voices are on the recording — the agent and the caller —
-captured by the app itself rather than by a screen recorder.
+Two sets of clips. The first are the agent alone, recorded straight from a live session using the
+shipped prompt, voice and catalogue — nothing else on the track. The second are excerpts from a real
+call, where both voices are present.
+
+**Priya only** — her answer to a real question, including the project search behind it:
+
+| Clip | She was asked | |
+|---|---|---|
+| [Hindi](docs/audio/priya-hindi.mp3) | *मुझे नोएडा में 3BHK चाहिए, बजट डेढ़ करोड़ तक* | 14 s |
+| [Hinglish](docs/audio/priya-hinglish.mp3) | *Sector 150 mein kya milega, aur possession kab tak hai?* | 15 s |
+| [English](docs/audio/priya-english.mp3) | *I'm looking for a ready-to-move 3BHK. Is it RERA registered?* | 8 s |
+
+**Both voices** — excerpts from an actual call:
 
 | Clip | What it shows | |
 |---|---|---|
-| [Opening, Hinglish](docs/audio/hinglish-opening.mp3) | She opens the call unprompted, asks permission, then intent | 26 s |
-| [Qualifying, Hinglish](docs/audio/hinglish-qualifying.mp3) | Budget, configuration and location captured conversationally | 30 s |
-| [Same agent, English](docs/audio/english-conversation.mp3) | The caller speaks English; she stays in English | 32 s |
+| [Opening](docs/audio/hinglish-opening.mp3) | She opens the call unprompted, asks permission, then intent | 26 s |
+| [Qualifying](docs/audio/hinglish-qualifying.mp3) | Budget, configuration and location captured conversationally | 30 s |
+| [In English](docs/audio/english-conversation.mp3) | The caller speaks English; she stays in English | 32 s |
 
-GitHub does not play audio inline — click a link to download or open it.
+GitHub does not play audio inline — click a link to download or open it. A screen recording mixes
+both voices into the same channels (measured L−R difference: −65 dB), which is why the agent-only
+clips are captured from a session rather than carved out of the video.
 
 ### The register she is aiming for
 
@@ -127,7 +140,7 @@ recovery section of the prompt is for.
 | | |
 |---|---|
 | ![Landing](docs/screenshots/01-landing.png) | ![Call setup](docs/screenshots/02-call-setup.png) |
-| **Landing.** The hero is a real transcript excerpt, not stock copy. | **Call setup.** Language, voice, model, and free-text instructions that change her flow for one call. |
+| **Landing.** The hero is a real transcript excerpt, not stock copy. | **Call setup.** Language, voice, and free-text instructions that change her flow for a single call. |
 | ![Projects](docs/screenshots/05-projects-ladder.png) | ![Project detail](docs/screenshots/06-project-detail.png) |
 | **The catalogue, on a budget axis.** Every project's price band on one log scale — you can see why ₹1.5 Cr and ₹2.5 Cr reach different projects. | **One project.** What `get_project_details` returns when a caller asks something specific. |
 | ![Leads](docs/screenshots/08-leads.png) | ![Lead detail](docs/screenshots/09-lead-detail.png) |
@@ -157,8 +170,20 @@ documentation.*
 | Hosting | Vercel | Free tier. |
 | Tests | `node:test` + Playwright | 40 unit tests, plus scripted live-call E2E. |
 
-**AI models used:** `gemini-3.1-flash-live-preview` (conversation) and `gemini-3.5-flash`
-(summarisation). Two other Live models are selectable in the UI at demo time.
+**AI models used:** `gemini-3.1-flash-live-preview` for the conversation and `gemini-3.5-flash` for
+summarisation. Both are free of charge on the Gemini Developer API free tier and were verified
+against a freshly issued key.
+
+Two other Live models are drop-in alternatives — `gemini-2.5-flash-native-audio-preview-12-2025` and
+`gemini-2.5-flash-native-audio-latest`. 3.1-flash-live is the default because it opened noticeably
+better Hindi in side-by-side testing ("Namaste! Aarambh Realty mein aapka swagat hai…" against 2.5's
+more anglicised "Hello! Main Priya from Aarambh Realty."). Swap with `GEMINI_LIVE_MODEL` in the
+environment rather than in the UI — which model runs is a deployment decision, not something a
+caller should be choosing.
+
+Summarisation walks a list of models and a list of API keys, falling through on a 429. Free-tier
+quota is per Google account and small (20 requests a day on `gemini-3.5-flash`), and losing the call
+summary because one bucket is spent is a bad failure for something that has to work on demand.
 
 ---
 

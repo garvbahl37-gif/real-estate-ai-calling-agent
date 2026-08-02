@@ -16,7 +16,9 @@
     "twilio:call": "tsx scripts/call-me.mts",
     "demo:title": "tsx scripts/render-title.mts",
     "demo:video": "tsx scripts/build-demo-video.mts",
-    "demo:screenshots": "node scripts/capture-screenshots.mjs"
+    "demo:screenshots": "node scripts/capture-screenshots.mjs",
+    "audit": "node scripts/audit.mjs",
+    "demo:voices": "tsx scripts/capture-voice-samples.mts"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",

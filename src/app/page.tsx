@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
-import { PROJECTS, formatInr } from "@/lib/projects";
+import { PROJECTS, formatInr, operatingMarkets } from "@/lib/projects";
 
 /**
  * The hero excerpt is verbatim from a recorded end-to-end test, not written
@@ -41,6 +41,11 @@ const CAPABILITIES = [
 ];
 
 export default function Home() {
+  // Derived, not hardcoded — the band drifted out of date the moment the
+  // catalogue grew from four projects to fifteen.
+  const cheapest = Math.min(...PROJECTS.map((p) => p.priceMinInr));
+  const dearest = Math.max(...PROJECTS.map((p) => p.priceMaxInr));
+
   return (
     <div className="flex min-h-dvh flex-col">
       <SiteHeader current="/" />
@@ -85,8 +90,8 @@ export default function Home() {
               <dl className="mt-12 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
                 {[
                   { k: "Languages", v: "3", note: "Hindi · Hinglish · English" },
-                  { k: "Projects", v: String(PROJECTS.length), note: "₹38 L – ₹6.5 Cr" },
-                  { k: "Voice", v: "Live", note: "Native speech-to-speech" },
+                  { k: "Projects", v: String(PROJECTS.length), note: `${formatInr(cheapest)} – ${formatInr(dearest)}` },
+                  { k: "Markets", v: String(operatingMarkets().length), note: "Noida · Greater Noida · Ghaziabad" },
                   { k: "Running cost", v: "₹0", note: "Free tier throughout" },
                 ].map((s) => (
                   <div key={s.k} className="shiro shiro-soft">
@@ -163,7 +168,7 @@ export default function Home() {
               </div>
               <Link
                 href="/projects"
-                className="text-aqua hover:text-ink text-[13px] font-semibold underline-offset-4 hover:underline"
+                className="text-aqua hover:text-ink inline-flex min-h-9 items-center text-[13px] font-semibold underline-offset-4 hover:underline"
               >
                 See the full catalogue →
               </Link>
@@ -258,10 +263,10 @@ export default function Home() {
       <footer className="border-rule border-t">
         <div className="text-ink-3 mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-6 gap-y-2 px-5 py-6 text-[12px] sm:px-8">
           <span>Aarambh Realty is a fictional developer created for this demo.</span>
-          <Link href="/how-it-works" className="hover:text-ink ml-auto underline-offset-4 hover:underline">
+          <Link href="/how-it-works" className="hover:text-ink ml-auto inline-flex min-h-9 items-center underline-offset-4 hover:underline">
             Architecture &amp; stack
           </Link>
-          <a href="/api/health" className="hover:text-ink underline-offset-4 hover:underline">
+          <a href="/api/health" className="hover:text-ink inline-flex min-h-9 items-center underline-offset-4 hover:underline">
             System health
           </a>
         </div>
