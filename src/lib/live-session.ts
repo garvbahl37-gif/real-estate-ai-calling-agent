@@ -210,10 +210,10 @@ export class LiveCall {
   /** Push a typed message into the live call (the console's text fallback). */
   sendText(text: string) {
     if (!this.session || this.closed) return;
-    // Typing while the agent is mid-sentence is a barge-in like any other:
-    // close her turn and drop the queued audio, so the transcript doesn't end
-    // up with a half-finished line sitting after the caller's reply.
-    this.finalizeAgentTurn();
+    // Typing while she is mid-sentence is a barge-in: drop the queued audio so
+    // she stops. Her turn is left open — the server will send `interrupted`,
+    // which is what actually closes it, and closing it here as well produced a
+    // stray half-sentence in the transcript.
     this.playerNode?.port.postMessage({ type: "flush" });
     this.session.sendRealtimeInput({ text });
     this.pushTurn({ id: nextId(), role: "customer", text, at: this.elapsedMs });
@@ -256,6 +256,19 @@ export class LiveCall {
     const active = isResume
       ? await this.fetchToken({ ...this.options, resumeHandle: this.resumeHandle })
       : cfg;
+
+    // Close any socket still open before opening another. Without this a
+    // reconnect can briefly leave two live sessions attached to the same
+    // player, and both stream audio — which is heard as the agent talking over
+    // herself in duplicate.
+    if (this.session) {
+      try {
+        this.session.close();
+      } catch {
+        /* already gone */
+      }
+      this.session = undefined;
+    }
 
     this.ai = new GoogleGenAI({ apiKey: active.token });
     this.session = await this.ai.live.connect({
@@ -469,6 +482,16 @@ export class LiveCall {
     if (sc.interrupted) {
       this.playerNode?.port.postMessage({ type: "flush" });
       this.recorder.discardUnplayedAgent();
+      // Cut off after two or three words, she typically restarts the sentence
+      // from the beginning. Keeping the stub leaves "Hello! I'm" sitting above
+      // the full line, which reads like a glitch rather than an interruption.
+      // Anything long enough to be a real (if unfinished) statement is kept.
+      if (this.openAgentTurn && this.openAgentTurn.text.trim().length < 20) {
+        const stub = this.openAgentTurn;
+        this.turns = this.turns.filter((t) => t !== stub);
+        this.openAgentTurn = undefined;
+        this.emitTranscript();
+      }
       this.finalizeAgentTurn();
       this.setState("listening");
       this.log("↩ Caller interrupted — playback flushed.");
@@ -482,7 +505,13 @@ export class LiveCall {
         // The worklet takes ownership of the buffer, so record before transfer.
         this.playerNode?.port.postMessage({ type: "chunk", buffer: pcm.buffer }, [pcm.buffer]);
       }
-      if (part.text) this.appendAgentText(part.text);
+      // Deliberately NOT appending `part.text` here.
+      //
+      // With responseModalities: [AUDIO] the agent's words arrive as
+      // `outputAudioTranscription`, which is the authoritative transcript.
+      // `modelTurn.parts[].text` carries the same content again — and
+      // occasionally a bare internal marker like "model" — so appending both
+      // duplicated every sentence and leaked stray tokens into the transcript.
     }
 
     if (sc.inputTranscription?.text) {
@@ -575,8 +604,12 @@ export class LiveCall {
       this.log(`Dropped a non-Hindi/English transcription fragment: ${JSON.stringify(text.slice(0, 40))}`);
       return;
     }
-    // The agent replying means the caller's turn has ended.
-    if (this.openAgentTurn) this.finalizeAgentTurn();
+    // Both turns may legitimately be open at once — this is a phone call, and
+    // people talk over each other. An earlier version closed the agent's turn
+    // whenever caller text arrived (and vice versa), which shredded a single
+    // sentence into "Hello, this" / "is Priya" / "from" / "Aarambh Realty"
+    // every time transcription of the two sides interleaved. Turns are now
+    // closed only by turnComplete or a genuine interruption.
     if (!this.openCustomerTurn) {
       this.openCustomerTurn = { id: nextId(), role: "customer", text: "", at: this.elapsedMs, partial: true };
       this.turns.push(this.openCustomerTurn);
@@ -591,7 +624,6 @@ export class LiveCall {
       this.log(`Dropped a non-Hindi/English agent fragment: ${JSON.stringify(text.slice(0, 40))}`);
       return;
     }
-    if (this.openCustomerTurn) this.finalizeCustomerTurn();
     if (!this.openAgentTurn) {
       this.openAgentTurn = { id: nextId(), role: "agent", text: "", at: this.elapsedMs, partial: true };
       this.turns.push(this.openAgentTurn);

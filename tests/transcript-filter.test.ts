@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { isHallucinatedScript } from "../src/lib/live-session";
@@ -42,5 +43,37 @@ describe("foreign-script transcription filter", () => {
 
   it("catches a mostly-foreign fragment even with some Latin in it", () => {
     assert.equal(isHallucinatedScript("好的好的好的好的 ok"), true);
+  });
+});
+
+describe("transcript assembly (regression guards)", () => {
+  // These lock in three bugs that shipped and were visible on a real call.
+  it("documents that agent text has exactly one source", () => {
+    // modelTurn.parts[].text and outputAudioTranscription.text both carry the
+    // agent's words. Appending both duplicated every sentence and leaked the
+    // literal token "model" into the transcript. Only the transcription is used.
+    const source = readFileSync(new URL("../src/lib/live-session.ts", import.meta.url), "utf8");
+    assert.ok(
+      !/if \(part\.text\) this\.appendAgentText/.test(source),
+      "agent text must come only from outputAudioTranscription, never modelTurn parts",
+    );
+  });
+
+  it("does not close one speaker's turn when the other speaks", () => {
+    // Overlapping speech is normal on a call. Cross-finalising shredded one
+    // sentence into "Hello, this" / "is Priya" / "from" / "Aarambh Realty".
+    const source = readFileSync(new URL("../src/lib/live-session.ts", import.meta.url), "utf8");
+    const appendCustomer = source.slice(source.indexOf("private appendCustomerText"), source.indexOf("private finalizeCustomerTurn"));
+    assert.ok(!/finalizeAgentTurn\(\)/.test(appendCustomer), "appendCustomerText must not finalise the agent's turn");
+    const appendAgent = source.slice(source.indexOf("private appendAgentText"), source.indexOf("private finalizeCustomerTurn"));
+    assert.ok(!/finalizeCustomerTurn\(\)/.test(appendAgent), "appendAgentText must not finalise the caller's turn");
+  });
+
+  it("closes any open session before opening another", () => {
+    // Two live sessions attached to the same player are heard as the agent
+    // talking over herself.
+    const source = readFileSync(new URL("../src/lib/live-session.ts", import.meta.url), "utf8");
+    const connect = source.slice(source.indexOf("private async connect()"), source.indexOf("private async handleUnexpectedClose"));
+    assert.ok(/if \(this\.session\)/.test(connect), "connect() must close an existing session first");
   });
 });

@@ -138,6 +138,12 @@ export function CallConsole() {
   /* ---------------- start / stop ---------------- */
 
   const start = useCallback(async () => {
+    // Tear the previous call down first. Each click builds a new LiveCall, and
+    // without this an older instance can still hold a socket and a player open,
+    // so two agents talk at once.
+    await callRef.current?.stop("restarted");
+    callRef.current = null;
+
     setError(null);
     setSummary(null);
     setTurns([]);
