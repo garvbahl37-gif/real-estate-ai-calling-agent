@@ -1,6 +1,16 @@
 import "server-only";
 import { neon } from "@neondatabase/serverless";
-import type { CallRecord, CallSummary, LeadRequirements, ToolInvocation, TranscriptTurn } from "./types";
+import type {
+  CallRecord,
+  CallSummary,
+  CallTelemetry,
+  GroundednessReport,
+  HandoffRequest,
+  LeadRequirements,
+  SentimentTrajectory,
+  ToolInvocation,
+  TranscriptTurn,
+} from "./types";
 
 /**
  * Call + lead persistence.
@@ -59,10 +69,30 @@ export function ensureSchema(): Promise<void> {
           transcript     JSONB NOT NULL DEFAULT '[]'::jsonb,
           tool_calls     JSONB NOT NULL DEFAULT '[]'::jsonb,
           requirements   JSONB NOT NULL DEFAULT '{}'::jsonb,
-          summary        JSONB
+          summary        JSONB,
+          telemetry      JSONB,
+          groundedness   JSONB,
+          sentiment      JSONB,
+          handoff        JSONB,
+          profile_id     TEXT,
+          campaign_id    TEXT
         )
       `;
       await sql!`CREATE INDEX IF NOT EXISTS calls_started_at_idx ON calls (started_at DESC)`;
+      // Added after the table shipped, so each is a separate idempotent step
+      // rather than a change to the CREATE above — an existing deployment must
+      // pick these up without a manual migration.
+      for (const col of [
+        "telemetry JSONB",
+        "groundedness JSONB",
+        "sentiment JSONB",
+        "handoff JSONB",
+        "profile_id TEXT",
+        "campaign_id TEXT",
+      ]) {
+        await sql!.query(`ALTER TABLE calls ADD COLUMN IF NOT EXISTS ${col}`);
+      }
+      await sql!`CREATE INDEX IF NOT EXISTS calls_campaign_idx ON calls (campaign_id)`;
     })().catch((e) => {
       // Reset so a transient connection failure doesn't poison every later request.
       schemaReady = null;
@@ -88,6 +118,12 @@ type Row = {
   tool_calls: ToolInvocation[];
   requirements: LeadRequirements;
   summary: CallSummary | null;
+  telemetry: CallTelemetry | null;
+  groundedness: GroundednessReport | null;
+  sentiment: SentimentTrajectory | null;
+  handoff: HandoffRequest | null;
+  profile_id: string | null;
+  campaign_id: string | null;
 };
 
 function rowToRecord(r: Row): CallRecord {
@@ -103,6 +139,12 @@ function rowToRecord(r: Row): CallRecord {
     toolCalls: r.tool_calls ?? [],
     requirements: r.requirements ?? {},
     summary: r.summary ?? undefined,
+    telemetry: r.telemetry ?? undefined,
+    groundedness: r.groundedness ?? undefined,
+    sentiment: r.sentiment ?? undefined,
+    handoff: r.handoff ?? undefined,
+    profileId: r.profile_id ?? undefined,
+    campaignId: r.campaign_id ?? undefined,
   };
 }
 
@@ -146,6 +188,12 @@ export interface UpdateCallInput {
   toolCalls?: ToolInvocation[];
   requirements?: LeadRequirements;
   summary?: CallSummary;
+  telemetry?: CallTelemetry;
+  groundedness?: GroundednessReport;
+  sentiment?: SentimentTrajectory;
+  handoff?: HandoffRequest;
+  profileId?: string;
+  campaignId?: string;
   status?: CallRecord["status"];
   endedAt?: string;
   durationSec?: number;
@@ -162,6 +210,12 @@ export async function updateCall(id: string, patch: UpdateCallInput): Promise<Ca
         tool_calls   = COALESCE(${patch.toolCalls ? JSON.stringify(patch.toolCalls) : null}::jsonb, tool_calls),
         requirements = COALESCE(${patch.requirements ? JSON.stringify(patch.requirements) : null}::jsonb, requirements),
         summary      = COALESCE(${patch.summary ? JSON.stringify(patch.summary) : null}::jsonb, summary),
+        telemetry    = COALESCE(${patch.telemetry ? JSON.stringify(patch.telemetry) : null}::jsonb, telemetry),
+        groundedness = COALESCE(${patch.groundedness ? JSON.stringify(patch.groundedness) : null}::jsonb, groundedness),
+        sentiment    = COALESCE(${patch.sentiment ? JSON.stringify(patch.sentiment) : null}::jsonb, sentiment),
+        handoff      = COALESCE(${patch.handoff ? JSON.stringify(patch.handoff) : null}::jsonb, handoff),
+        profile_id   = COALESCE(${patch.profileId ?? null}, profile_id),
+        campaign_id  = COALESCE(${patch.campaignId ?? null}, campaign_id),
         status       = COALESCE(${patch.status ?? null}, status),
         ended_at     = COALESCE(${patch.endedAt ?? null}::timestamptz, ended_at),
         duration_sec = COALESCE(${patch.durationSec ?? null}, duration_sec)
@@ -179,6 +233,12 @@ export async function updateCall(id: string, patch: UpdateCallInput): Promise<Ca
     toolCalls: patch.toolCalls ?? existing.toolCalls,
     requirements: patch.requirements ?? existing.requirements,
     summary: patch.summary ?? existing.summary,
+    telemetry: patch.telemetry ?? existing.telemetry,
+    groundedness: patch.groundedness ?? existing.groundedness,
+    sentiment: patch.sentiment ?? existing.sentiment,
+    handoff: patch.handoff ?? existing.handoff,
+    profileId: patch.profileId ?? existing.profileId,
+    campaignId: patch.campaignId ?? existing.campaignId,
     status: patch.status ?? existing.status,
     endedAt: patch.endedAt ?? existing.endedAt,
     durationSec: patch.durationSec ?? existing.durationSec,

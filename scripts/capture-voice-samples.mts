@@ -9,13 +9,12 @@
  * live session instead: real replies, using the shipped prompt, voice and
  * catalogue, with nothing else on the track.
  */
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
+import "./load-env.mts";
 
 import { execFileSync } from "node:child_process";
 import { unlinkSync, writeFileSync } from "node:fs";
 import { GoogleGenAI, type LiveServerMessage, type Session } from "@google/genai";
-import { executeAgentTool } from "../src/lib/agent-tools";
+import { runAgentTool } from "../src/lib/agent-tools";
 import { GEMINI_API_KEYS, LIVE_MODEL } from "../src/lib/config";
 import { buildLiveConfig } from "../src/lib/live-config";
 
@@ -100,13 +99,14 @@ for (const s of SAMPLES) {
             // result — which is exactly what the first version of this script
             // failed to send, so every sample came back zero-length.
             if (m.toolCall?.functionCalls?.length) {
-              session?.sendToolResponse({
-                functionResponses: m.toolCall.functionCalls.map((fc) => ({
+              void Promise.all(
+                m.toolCall.functionCalls.map(async (fc) => ({
                   id: fc.id,
                   name: fc.name,
-                  response: executeAgentTool(fc.name ?? "", (fc.args ?? {}) as Record<string, unknown>).response,
+                  response: (await runAgentTool(fc.name ?? "", (fc.args ?? {}) as Record<string, unknown>))
+                    .response,
                 })),
-              });
+              ).then((functionResponses) => session?.sendToolResponse({ functionResponses }));
             }
 
             // Skip her greeting; we want the answer to a real question.

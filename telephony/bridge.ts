@@ -1,6 +1,6 @@
 import { GoogleGenAI, type LiveServerMessage, type Session } from "@google/genai";
 import type { WebSocket } from "ws";
-import { executeAgentTool, mergeRequirements } from "../src/lib/agent-tools";
+import { mergeRequirements, runAgentTool } from "../src/lib/agent-tools";
 import { buildLiveConfig } from "../src/lib/live-config";
 import type { LeadRequirements, ToolInvocation, TranscriptTurn } from "../src/lib/types";
 import {
@@ -193,12 +193,16 @@ export class PhoneCallBridge {
     this.persistTimer = setInterval(() => void this.persist(), 5000);
   }
 
-  private onGeminiMessage(msg: LiveServerMessage) {
-    if (msg.toolCall?.functionCalls?.length) {
-      const responses = msg.toolCall.functionCalls.map((fc) => {
+  /**
+   * Async because semantic search has to embed the caller's words. Everything
+   * else resolves immediately, so a call still sees ~0ms of tool latency.
+   */
+  private async runToolCalls(functionCalls: { id?: string; name?: string; args?: unknown }[]) {
+    const responses = await Promise.all(
+      functionCalls.map(async (fc) => {
         const name = fc.name ?? "";
         const args = (fc.args ?? {}) as Record<string, unknown>;
-        const result = executeAgentTool(name, args);
+        const result = await runAgentTool(name, args);
 
         if (result.requirementsPatch) {
           this.requirements = mergeRequirements(this.requirements, result.requirementsPatch);
@@ -219,12 +223,18 @@ export class PhoneCallBridge {
           }, 45_000);
         }
         return { id: fc.id, name: fc.name, response: result.response };
-      });
-      try {
-        this.session?.sendToolResponse({ functionResponses: responses });
-      } catch {
-        /* session gone */
-      }
+      }),
+    );
+    try {
+      this.session?.sendToolResponse({ functionResponses: responses });
+    } catch {
+      /* session gone */
+    }
+  }
+
+  private onGeminiMessage(msg: LiveServerMessage) {
+    if (msg.toolCall?.functionCalls?.length) {
+      void this.runToolCalls(msg.toolCall.functionCalls);
     }
 
     const sc = msg.serverContent;

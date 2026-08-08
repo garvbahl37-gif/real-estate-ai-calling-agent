@@ -1,10 +1,11 @@
 "use client";
 
 import { GoogleGenAI, type LiveServerMessage, type Session } from "@google/genai";
-import { executeAgentTool, mergeRequirements } from "./agent-tools";
+import { mergeRequirements, runAgentTool } from "./agent-tools";
 import { CallRecorder } from "./call-recorder";
+import { TelemetryCollector, pcmDurationMs } from "./telemetry";
 import { INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE, arrayBufferToBase64, base64ToFloat32 } from "./audio-utils";
-import type { LeadRequirements, ToolInvocation, TranscriptTurn } from "./types";
+import type { CallTelemetry, HandoffRequest, LeadRequirements, ToolInvocation, TranscriptTurn } from "./types";
 
 export type CallState =
   | "idle"
@@ -125,6 +126,8 @@ export class LiveCall {
   private agentLevel = 0;
   /** Records both sides so the demo does not depend on OS audio routing. */
   private recorder = new CallRecorder();
+  private telemetry = new TelemetryCollector();
+  private handoff?: HandoffRequest;
   private levelRaf?: number;
   private endCallTimer?: ReturnType<typeof setTimeout>;
 
@@ -175,6 +178,15 @@ export class LiveCall {
     return this.recorder.toWavBlob();
   }
 
+  /** Measured latency, tool timings and usage for this call. */
+  getTelemetry(): CallTelemetry {
+    return this.telemetry.snapshot();
+  }
+
+  getHandoff(): HandoffRequest | undefined {
+    return this.handoff;
+  }
+
   get recordedSeconds() {
     return this.recorder.durationSec;
   }
@@ -198,6 +210,8 @@ export class LiveCall {
       await this.setupAudio();
       this.recorder.reset();
       this.recorder.start();
+      this.telemetry.reset();
+      this.telemetry.start();
       this.log("Mic capturing at 16 kHz · playback ready at 24 kHz · recording both sides");
 
       await this.connect();
@@ -333,6 +347,7 @@ export class LiveCall {
 
     this.reconnectAttempts += 1;
     this.totalReconnects += 1;
+    this.telemetry.reconnected();
     this.setState("reconnecting");
     // Drop any half-played audio so the agent doesn't resume mid-word.
     this.playerNode?.port.postMessage({ type: "flush" });
@@ -472,8 +487,12 @@ export class LiveCall {
     }
 
     if (msg.toolCall?.functionCalls?.length) {
-      this.runToolCalls(msg.toolCall.functionCalls);
+      void this.runToolCalls(msg.toolCall.functionCalls);
     }
+
+    const usage = (msg as { usageMetadata?: { promptTokenCount?: number; responseTokenCount?: number } })
+      .usageMetadata;
+    if (usage) this.telemetry.usage(usage.promptTokenCount, usage.responseTokenCount);
 
     const sc = msg.serverContent;
     if (!sc) return;
@@ -501,6 +520,7 @@ export class LiveCall {
       const inline = part.inlineData;
       if (inline?.data && inline.mimeType?.startsWith("audio/")) {
         const pcm = base64ToFloat32(inline.data);
+        this.telemetry.agentAudio(pcmDurationMs(pcm.length));
         this.recorder.pushAgent(pcm);
         // The worklet takes ownership of the buffer, so record before transfer.
         this.playerNode?.port.postMessage({ type: "chunk", buffer: pcm.buffer }, [pcm.buffer]);
@@ -524,6 +544,8 @@ export class LiveCall {
     if (sc.turnComplete) {
       this.finalizeCustomerTurn();
       this.finalizeAgentTurn();
+      // Her turn is done; the next thing the caller says starts a new clock.
+      this.telemetry.callerTurnEnded();
       if (this.pendingEnd) {
         this.pendingEnd.sawTurnComplete = true;
         this.maybeFinishAfterSpeech();
@@ -531,11 +553,20 @@ export class LiveCall {
     }
   }
 
-  private runToolCalls(functionCalls: { id?: string; name?: string; args?: unknown }[]) {
-    const responses = functionCalls.map((fc) => {
+  private async runToolCalls(functionCalls: { id?: string; name?: string; args?: unknown }[]) {
+    const responses = await Promise.all(
+      functionCalls.map(async (fc) => {
       const name = fc.name ?? "";
       const args = (fc.args ?? {}) as Record<string, unknown>;
-      const result = executeAgentTool(name, args);
+      const toolId = fc.id ?? nextId();
+      this.telemetry.toolStarted(toolId);
+      const result = await runAgentTool(name, args);
+      this.telemetry.toolFinished(toolId, name);
+
+      if (result.handoff) {
+        this.handoff = { ...result.handoff, requestedAt: this.elapsedMs };
+        this.log(`🙋 caller asked for a human — ${result.handoff.reason}`);
+      }
 
       if (result.requirementsPatch) {
         this.requirements = mergeRequirements(this.requirements, result.requirementsPatch);
@@ -568,8 +599,9 @@ export class LiveCall {
         }, 45_000);
       }
 
-      return { id: fc.id, name: fc.name, response: result.response };
-    });
+        return { id: fc.id, name: fc.name, response: result.response };
+      }),
+    );
 
     try {
       this.session?.sendToolResponse({ functionResponses: responses });

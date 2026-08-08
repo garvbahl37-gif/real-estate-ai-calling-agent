@@ -1,5 +1,6 @@
 import { Type, type FunctionDeclaration } from "@google/genai";
 import { PROJECTS, formatInr, getProject } from "./projects";
+import { findProjectsByDescription } from "./semantic-tool";
 import type { LeadRequirements, Project } from "./types";
 
 /**
@@ -93,6 +94,25 @@ export const AGENT_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
     },
   },
   {
+    name: "find_projects_by_description",
+    description:
+      "Find projects by what the caller MEANS rather than by filters. Use this when they describe a " +
+      "requirement that budget/location/configuration cannot express — 'somewhere quiet for my " +
+      "parents', 'good rental demand', 'close to the new airport', 'a place where kids can play'. " +
+      "For a plain budget-and-configuration request, use search_projects instead: it is faster and " +
+      "enforces the numbers exactly.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        description: {
+          type: Type.STRING,
+          description: "The caller's requirement in their own words, translated to English if needed.",
+        },
+      },
+      required: ["description"],
+    },
+  },
+  {
     name: "get_project_details",
     description:
       "Get the full fact sheet for one project — every unit size and price, the complete amenity " +
@@ -127,6 +147,29 @@ export const AGENT_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
         },
       },
       required: ["projectId", "name", "phone", "preferredTime"],
+    },
+  },
+  {
+    name: "transfer_to_human",
+    description:
+      "Hand the call to a human sales manager. Call this the moment the caller asks to speak to a " +
+      "person, says they do not want to talk to a bot, or raises something you are not permitted to " +
+      "answer — a discount, a specific floor, loan approval, a legal question. Do not talk them out " +
+      "of it and do not attempt one more pitch first.",
+    parameters: {
+      type: Type.OBJECT,
+      properties: {
+        reason: {
+          type: Type.STRING,
+          description: "One line for the human picking it up: what the caller wants and why you could not handle it.",
+        },
+        urgency: {
+          type: Type.STRING,
+          enum: ["now", "callback"],
+          description: "'now' if they want to be put through immediately, 'callback' if a call back is fine.",
+        },
+      },
+      required: ["reason", "urgency"],
     },
   },
   {
@@ -166,6 +209,8 @@ export interface ToolExecutionResult {
   requirementsPatch?: Partial<LeadRequirements>;
   /** Signals the transport layer to tear the call down. */
   endCall?: { outcome: string; reason?: string };
+  /** Signals that a human should take over. */
+  handoff?: { reason: string; urgency: "now" | "callback" };
 }
 
 /**
@@ -333,6 +378,17 @@ function scoreProject(
   return { score, reasons, blockers };
 }
 
+/** Tools that must reach the network, and so cannot run in the pure executor. */
+const ASYNC_TOOLS = new Set(["find_projects_by_description"]);
+
+/**
+ * The pure executor: synchronous, no network, no clock. Everything the agent
+ * does on a call goes through here except semantic search, which has to embed
+ * the caller's words and is dispatched by `runAgentTool` instead.
+ *
+ * Keeping this function pure is what makes the tool path testable without
+ * mocks and instant on a voice call.
+ */
 export function executeAgentTool(name: string, rawArgs: Record<string, unknown>): ToolExecutionResult {
   const args = rawArgs ?? {};
 
@@ -463,6 +519,25 @@ export function executeAgentTool(name: string, rawArgs: Record<string, unknown>)
       };
     }
 
+    case "transfer_to_human": {
+      const reason = String(args.reason ?? "Caller asked for a human");
+      const urgency = args.urgency === "now" ? "now" : "callback";
+      return {
+        response: {
+          ok: true,
+          guidance:
+            urgency === "now"
+              ? "Tell the caller you are connecting them to a sales manager now, then stay on the line briefly. " +
+                "Do not pitch again."
+              : "Tell the caller a sales manager will call them back shortly, confirm the best time, then close.",
+          // Flagged so nobody demoing this mistakes it for a live transfer.
+          simulated: true,
+        },
+        requirementsPatch: { notes: `Asked for a human: ${reason}` },
+        handoff: { reason, urgency },
+      };
+    }
+
     case "end_call": {
       const outcome = String(args.outcome ?? "qualified_lead");
       const reason = args.reason ? String(args.reason) : undefined;
@@ -478,6 +553,19 @@ export function executeAgentTool(name: string, rawArgs: Record<string, unknown>)
         response: { error: `Unknown tool "${name}".` },
       };
   }
+}
+
+/**
+ * What call sites use. Dispatches the one networked tool and delegates
+ * everything else to the pure executor, so the async boundary lives in exactly
+ * one place instead of spreading through every transport.
+ */
+export async function runAgentTool(name: string, rawArgs: Record<string, unknown>): Promise<ToolExecutionResult> {
+  if (ASYNC_TOOLS.has(name)) {
+    const response = await findProjectsByDescription(String((rawArgs ?? {}).description ?? ""));
+    return { response: response as Record<string, unknown> };
+  }
+  return executeAgentTool(name, rawArgs);
 }
 
 /** Later values win, but a later `undefined` never clears an earlier value. */

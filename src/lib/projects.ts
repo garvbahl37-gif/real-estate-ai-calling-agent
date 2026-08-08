@@ -752,6 +752,48 @@ export function formatInr(amount: number): string {
   return `₹${amount.toLocaleString("en-IN")}`;
 }
 
+/**
+ * Places this developer does not sell in, for catching a request that is in the
+ * wrong geography before anything tries to answer it.
+ *
+ * A blocklist is the wrong shape in general — it can never be complete. It is
+ * the right shape *here* because the cost is asymmetric: a place we fail to
+ * list simply falls through to the normal "does any project match" path, while
+ * a place we do list is caught with certainty. The entries are the ones a
+ * Delhi-NCR buyer actually names, with the near-misses first — Gurgaon and
+ * Dwarka are 40 km from our nearest project and are what callers ask for by
+ * mistake.
+ */
+const UNSERVED_PLACES = [
+  // NCR, but not ours — the realistic confusions.
+  "gurgaon", "gurugram", "faridabad", "dwarka", "sonipat", "bahadurgarh", "manesar", "rewari", "palwal",
+  "new delhi", "delhi",
+  // Other metros.
+  "mumbai", "bombay", "pune", "bangalore", "bengaluru", "hyderabad", "chennai", "kolkata", "ahmedabad",
+  "jaipur", "chandigarh", "lucknow", "indore", "surat", "nagpur", "kochi", "coimbatore", "bhopal",
+  "dehradun", "mohali", "panchkula", "vadodara", "visakhapatnam", "mysore", "thane", "navi mumbai",
+  // States and regions, for "a farmhouse in Punjab".
+  "goa", "punjab", "kerala", "rajasthan", "gujarat", "karnataka", "maharashtra", "tamil nadu",
+  "himachal", "uttarakhand", "andhra", "telangana", "odisha", "assam", "bihar", "west bengal",
+  // Abroad.
+  "dubai", "singapore", "london", "toronto", "new york", "abu dhabi", "sharjah", "bali", "thailand",
+];
+
+/**
+ * Returns the unserved place named in `text`, or null.
+ *
+ * "Delhi NCR" is stripped first: it is a region label that includes Noida, so a
+ * caller saying it has not asked for Delhi proper and gating them would be wrong.
+ */
+export function unservedPlaceIn(text: string): string | null {
+  const hay = ` ${text.toLowerCase().replace(/delhi[\s-]*ncr|\bncr\b/g, " ")} `;
+  // Longest first so "navi mumbai" wins over "mumbai" and reads better in the reply.
+  for (const place of [...UNSERVED_PLACES].sort((a, b) => b.length - a.length)) {
+    if (new RegExp(`(^|[^a-z])${place}([^a-z]|$)`).test(hay)) return place;
+  }
+  return null;
+}
+
 /** Every market the agent operates in, derived rather than hand-maintained. */
 export function operatingMarkets(): string[] {
   return Array.from(new Set(PROJECTS.map((p) => p.city)));

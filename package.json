@@ -18,7 +18,9 @@
     "demo:video": "tsx scripts/build-demo-video.mts",
     "demo:screenshots": "node scripts/capture-screenshots.mjs",
     "audit": "node scripts/audit.mjs",
-    "demo:voices": "tsx scripts/capture-voice-samples.mts"
+    "demo:voices": "tsx scripts/capture-voice-samples.mts",
+    "eval": "tsx scripts/eval.mts",
+    "embeddings": "tsx scripts/build-embeddings.mts"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",

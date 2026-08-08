@@ -103,7 +103,7 @@ export function CallConsole() {
     return () => clearInterval(t);
   }, [active, callId]);
 
-  const finaliseCall = useCallback(async (id: string | null) => {
+  const finaliseCall = useCallback(async (id: string | null, call?: LiveCall | null) => {
     if (!id) return;
     setSummarising(true);
     try {
@@ -115,6 +115,8 @@ export function CallConsole() {
           transcript: latest.current.turns,
           requirements: latest.current.requirements,
           toolCalls: latest.current.toolCalls,
+          telemetry: call?.getTelemetry(),
+          handoff: call?.getHandoff(),
           status: "completed",
           endedAt: new Date().toISOString(),
           durationSec,
@@ -187,7 +189,7 @@ export function CallConsole() {
       onEnded: () => {
         const wav = call.getRecording();
         if (wav) setRecordingUrl(URL.createObjectURL(wav));
-        void finaliseCall(newCallId);
+        void finaliseCall(newCallId, call);
       },
     });
     callRef.current = call;

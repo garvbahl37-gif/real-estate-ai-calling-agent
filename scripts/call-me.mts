@@ -10,9 +10,7 @@
  *   pnpm telephony
  *   ngrok http 5050            # then set TELEPHONY_PUBLIC_HOST to the https URL
  */
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
-loadEnv({ path: ".env" });
+import "./load-env.mts";
 
 import { explainTwilioError, normaliseIndianNumber, placeOutboundCall } from "../telephony/outbound";
 

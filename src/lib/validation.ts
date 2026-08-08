@@ -83,11 +83,55 @@ export const createCallSchema = z.object({
   fromNumber: z.string().max(24).optional(),
 });
 
+export const telemetrySchema = z
+  .object({
+    turns: z
+      .array(
+        z.object({
+          timeToFirstAudioMs: z.number().finite().nonnegative().max(600_000),
+          spokenMs: z.number().finite().nonnegative().max(600_000),
+          at: z.number().finite().nonnegative(),
+        }),
+      )
+      .max(500),
+    tools: z
+      .array(
+        z.object({
+          name: z.string().max(64),
+          durationMs: z.number().finite().nonnegative().max(600_000),
+          at: z.number().finite().nonnegative(),
+        }),
+      )
+      .max(500),
+    bargeIns: z.number().int().nonnegative().max(10_000),
+    reconnects: z.number().int().nonnegative().max(1000),
+    promptTokens: z.number().int().nonnegative().optional(),
+    responseTokens: z.number().int().nonnegative().optional(),
+    totalTokens: z.number().int().nonnegative().optional(),
+    medianTtfaMs: z.number().finite().nonnegative().optional(),
+    p95TtfaMs: z.number().finite().nonnegative().optional(),
+    estimatedCostUsd: z.number().finite().nonnegative().optional(),
+  })
+  .strip();
+
+export const handoffSchema = z
+  .object({
+    requestedAt: z.number().finite().nonnegative(),
+    reason: z.string().max(500),
+    urgency: z.enum(["now", "callback"]),
+    acceptedAt: z.iso.datetime().optional(),
+  })
+  .strip();
+
 export const updateCallSchema = z
   .object({
     transcript: z.array(transcriptTurnSchema).max(2000).optional(),
     toolCalls: z.array(toolInvocationSchema).max(1000).optional(),
     requirements: leadRequirementsSchema.optional(),
+    telemetry: telemetrySchema.optional(),
+    handoff: handoffSchema.optional(),
+    profileId: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    campaignId: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
     status: z.enum(["in_progress", "completed", "failed"]).optional(),
     endedAt: z.iso.datetime().optional(),
     durationSec: z.number().int().nonnegative().max(86_400).optional(),

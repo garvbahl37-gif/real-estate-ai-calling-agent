@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { RULES, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getCall, updateCall } from "@/lib/store";
+import { checkGroundedness } from "@/lib/groundedness";
+import { analyseSentiment } from "@/lib/sentiment";
 import { summarizeCall } from "@/lib/summarize";
 import { callIdSchema } from "@/lib/validation";
 
@@ -36,7 +38,10 @@ export async function POST(req: Request, ctx: Ctx) {
   if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
 
   if (call.summary && body.force !== true) {
-    return NextResponse.json({ summary: call.summary, cached: true });
+    return NextResponse.json(
+      { summary: call.summary, groundedness: call.groundedness, sentiment: call.sentiment, cached: true },
+      { headers: rateLimitHeaders(limit) },
+    );
   }
 
   // Summarising an empty transcript burns quota to produce nothing useful.
@@ -45,14 +50,28 @@ export async function POST(req: Request, ctx: Ctx) {
     return NextResponse.json({ error: "Nothing was said on this call — no summary to generate." }, { status: 422 });
   }
 
-  const summary = await summarizeCall(call);
+  // Three independent passes over the same transcript, so they run together
+  // rather than serially — the caller is staring at a spinner and none of them
+  // depends on another's output.
+  const [summary, groundedness, sentiment] = await Promise.all([
+    summarizeCall(call),
+    checkGroundedness(call),
+    analyseSentiment(call),
+  ]);
 
   const endedAt = call.endedAt ?? new Date().toISOString();
   const durationSec =
     call.durationSec ??
     Math.max(0, Math.round((new Date(endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000));
 
-  await updateCall(id.data, { summary, status: "completed", endedAt, durationSec });
+  await updateCall(id.data, {
+    summary,
+    groundedness,
+    sentiment,
+    status: "completed",
+    endedAt,
+    durationSec,
+  });
 
-  return NextResponse.json({ summary, cached: false }, { headers: rateLimitHeaders(limit) });
+  return NextResponse.json({ summary, groundedness, sentiment, cached: false }, { headers: rateLimitHeaders(limit) });
 }

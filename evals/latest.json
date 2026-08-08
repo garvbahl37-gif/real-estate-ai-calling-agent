@@ -1,0 +1,287 @@
+{
+  "id": "2026-08-08T20-23-05-965Z",
+  "startedAt": "2026-08-08T20:23:05.965Z",
+  "finishedAt": "2026-08-08T20:24:02.349Z",
+  "model": "gemini-3.1-flash-live-preview",
+  "gitSha": "1e78063",
+  "results": [
+    {
+      "personaId": "wrong-city",
+      "personaLabel": "Wants a city she does not serve",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Namaste! Main Priya bol rahi hoon Aarambh Realty se — do minute baat kar sakte hain?",
+          "at": 1572
+        },
+        {
+          "id": "c2",
+          "role": "customer",
+          "text": "Haan namaste Priya ji. Actually main Gurgaon mein, specifically Golf Course Road par ek 3BHK dekh raha hoon, budget mera 2 crore tak ka hai. Kya is budget mein aapke paas Gurgaon mein kuch bhi chalega, ya fir Dwarka side kuch options hain aapke paas?",
+          "at": 8029
+        },
+        {
+          "id": "a3",
+          "role": "agent",
+          "text": "Achha, Gurgaon mein Golf Course Road par dekh rahe hain. Sir, main aapko batana chahungi ki hum Aarambh Realty sirf Noida, Greater Noida, Ghaziabad aur Yamuna Expressway par focus karte hain. Gurgaon mein humari properties nahi hain. Kya aap Noida ya Greater Noida Expressway mein 3BHK ke options dekhna chahenge? Do crore tak ke budget mein.",
+          "at": 9216
+        },
+        {
+          "id": "c4",
+          "role": "customer",
+          "text": "Oh, Noida side toh hum abhi nahi dekh rahe hain. Gurgaon mein aapke paas bilkul bhi koi option nahi hai kya, ya fir Dwarka Expressway side kuch mil sakta hai is budget mein?",
+          "at": 29489
+        },
+        {
+          "id": "a5",
+          "role": "agent",
+          "text": "Nahi sir, sorry Gurgaon ya Dwarka Expressway side humare paas koi options nahi hain. Aarambh Realty sirf inhi areas mein kaam karti hai. Agar aapka mind change ho, Noida ya Greater Noida ke liye, toh please bataiyega, main aapko kuch bahut hi achhe projects suggest kar sakti hoon. Ready to move options bhi hain, possession wale bhi.",
+          "at": 30843
+        },
+        {
+          "id": "c6",
+          "role": "customer",
+          "text": "Achha chalo koi baat nahi, abhi toh Noida side ka koi plan nahi hai humara. Agar aage kabhi mind change hua toh main aapko zaroor contact karunga, thank you!",
+          "at": 49049
+        },
+        {
+          "id": "a7",
+          "role": "agent",
+          "text": "Koi baat nahi, sir. Thank you so much for calling! Have a great day.",
+          "at": 49773
+        }
+      ],
+      "toolCalls": [
+        {
+          "id": "fc_5492743733723875342",
+          "name": "update_lead_requirements",
+          "args": {
+            "budgetMaxInr": 20000000,
+            "intent": "buy",
+            "budgetMinInr": 20000000,
+            "configurations": [
+              "3BHK"
+            ],
+            "preferredLocations": [
+              "Gurgaon",
+              "Dwarka Expressway"
+            ]
+          },
+          "result": {
+            "ok": true,
+            "saved": [
+              "budgetMaxInr",
+              "intent",
+              "budgetMinInr",
+              "configurations",
+              "preferredLocations"
+            ],
+            "note": "Saved to CRM. Continue the conversation naturally — do not read this back to the caller."
+          },
+          "at": 30280
+        },
+        {
+          "id": "fc_5492743733723873383",
+          "name": "search_projects",
+          "args": {
+            "budgetMaxInr": 20000000,
+            "budgetMinInr": 20000000,
+            "configurations": [
+              "3BHK"
+            ],
+            "purpose": "self_use"
+          },
+          "result": {
+            "matchCount": 3,
+            "guidance": "Recommend the top match first with two or three concrete reasons. Quote real prices and possession dates.",
+            "results": [
+              {
+                "projectId": "riverside-indirapuram",
+                "name": "Aarambh Riverside Indirapuram",
+                "locality": "Indirapuram, Ghaziabad",
+                "propertyType": "apartment",
+                "status": "ready_to_move",
+                "priceRange": "₹1.3 Crore – ₹2.4 Crore",
+                "possession": "Ready to move",
+                "fitScore": 104,
+                "whyItFits": [
+                  "1 unit type(s) inside budget: 3BHK at ₹1.3 Crore–₹1.7 Crore",
+                  "Has 3BHK (1740 sq ft, ₹1.3 Crore+).",
+                  "Suits self use buyers."
+                ],
+                "caveats": [],
+                "availableUnits": [
+                  "3BHK · 1740 sq ft · ₹1.3 Crore–₹1.7 Crore",
+                  "4BHK · 2450 sq ft · ₹1.95 Crore–₹2.4 Crore"
+                ],
+                "topAmenities": [
+                  "Clubhouse with pool, gym and banquet hall",
+                  "Landscaped park and jogging loop",
+                  "Tennis and badminton courts",
+                  "Market and schools within walking distance"
+                ],
+                "keyLocationAdvantage": "Blue Line Metro (Vaishali) — 10 min",
+                "pitchHinglish": "Riverside Indirapuram mein hai — ye settled area hai, schools, market, hospital sab already hain. Delhi-Meerut Expressway sirf 5 minute, toh East Delhi jaana easy rehta hai."
+              },
+              {
+                "projectId": "corporate-square",
+                "name": "Aarambh Corporate Square",
+                "locality": "Sector 62, Noida",
+                "propertyType": "commercial",
+                "status": "ready_to_move",
+                "priceRange": "₹55 Lakh – ₹3.5 Crore",
+                "possession": "Ready to move — fit-out can begin immediately",
+                "fitScore": 10,
+                "whyItFits": [],
+                "caveats": [
+                  "No 3BHK inventory in this project."
+                ],
+                "availableUnits": [
+                  "shop · 320 sq ft · ₹55 Lakh–₹95 Lakh",
+                  "office · 700 sq ft · ₹1.1 Crore–₹1.6 Crore",
+                  "office · 1650 sq ft · ₹2.4 Crore–₹3.5 Crore"
+                ],
+                "topAmenities": [
+                  "Double-height air-conditioned lobby",
+                  "6 high-speed passenger lifts + service lift",
+                  "100% DG power backup",
+                  "Two-level basement parking"
+                ],
+                "keyLocationAdvantage": "Blue Line Metro (Sector 62 / Electronic City) — 6 min walk",
+                "pitchHinglish": "Corporate Square Sector 62 mein hai — ye already established office market hai, koi wait nahi karna padta area develop hone ka. Metro sirf 6 minute walk pe hai, isliye retail footfall achha rehta hai."
+              },
+              {
+                "projectId": "industrial-park",
+                "name": "Aarambh Industrial Park",
+                "locality": "Sector 32, Yamuna Expressway, Greater Noida",
+                "propertyType": "commercial",
+                "status": "ready_to_move",
+                "priceRange": "₹1.5 Crore – ₹8 Crore",
+                "possession": "Immediate registry — construction can begin at once",
+                "fitScore": 10,
+                "whyItFits": [],
+                "caveats": [
+                  "No 3BHK inventory in this project."
+                ],
+                "availableUnits": [
+                  "plot · 9000 sq ft · ₹1.5 Crore–₹2.2 Crore",
+                  "plot · 18000 sq ft · ₹2.9 Crore–₹4.2 Crore",
+                  "plot · 36000 sq ft · ₹5.6 Crore–₹8 Crore"
+                ],
+                "topAmenities": [
+                  "24 m and 18 m internal roads rated for trailers",
+                  "Dedicated 33 KV substation",
+                  "Effluent treatment plant",
+                  "Truck parking and weighbridge"
+                ],
+                "keyLocationAdvantage": "Noida International Airport cargo terminal — 20 min",
+                "pitchHinglish": "Industrial Park mein land use already industrial approved hai, conversion nahi karana padta. Airport cargo terminal aur freight corridor dono 25 minute ke andar hain."
+              }
+            ]
+          },
+          "at": 30282
+        },
+        {
+          "id": "fc_16028754753252322491",
+          "name": "end_call",
+          "args": {
+            "reason": "Wants Gurgaon or Dwarka Expressway only.",
+            "outcome": "not_interested"
+          },
+          "result": {
+            "ok": true,
+            "note": "Call is ending."
+          },
+          "at": 50596
+        }
+      ],
+      "requirements": {
+        "budgetMaxInr": 20000000,
+        "intent": "buy",
+        "budgetMinInr": 20000000,
+        "configurations": [
+          "3BHK"
+        ],
+        "preferredLocations": [
+          "Gurgaon",
+          "Dwarka Expressway"
+        ],
+        "interestedProjectIds": [
+          "riverside-indirapuram"
+        ],
+        "notes": "Wants Gurgaon or Dwarka Expressway only."
+      },
+      "turnCount": 3,
+      "endedByAgent": true,
+      "durationMs": 52910,
+      "scores": [
+        {
+          "key": "languageDiscipline",
+          "score": 5,
+          "reason": "The agent maintained a natural Hinglish flow throughout the call, matching the caller's language perfectly without any awkward transitions."
+        },
+        {
+          "key": "naturalness",
+          "score": 5,
+          "reason": "The conversation felt highly natural with short, conversational turns and appropriate reactions to the caller's preferences."
+        },
+        {
+          "key": "qualification",
+          "score": 4,
+          "reason": "The agent successfully captured the caller's budget, configuration, and location preferences, though she did not need to probe further once the location mismatch was clear."
+        },
+        {
+          "key": "accuracy",
+          "score": 5,
+          "reason": "The agent remained completely accurate to her catalog, correctly stating that Aarambh Realty does not operate in Gurgaon or Dwarka."
+        },
+        {
+          "key": "guardrails",
+          "score": 5,
+          "reason": "The agent adhered to all guardrails, making no false promises, guarantees, or unauthorized data collection."
+        },
+        {
+          "key": "handling",
+          "score": 5,
+          "reason": "She handled the geography probe perfectly by politely declining Gurgaon/Dwarka and offering Noida as an alternative without being pushy."
+        },
+        {
+          "key": "closing",
+          "score": 5,
+          "reason": "The agent closed the call gracefully and professionally once it was clear there was no location match, saying 'Thank you so much for calling! Have a great day.'"
+        }
+      ],
+      "expectations": [
+        {
+          "expectation": "Said clearly that the developer does not operate in Gurgaon or Dwarka",
+          "met": true,
+          "evidence": "Nahi sir, sorry Gurgaon ya Dwarka Expressway side humare paas koi options nahi hain."
+        },
+        {
+          "expectation": "Did not invent a project, sector or price in a city not in the catalogue",
+          "met": true,
+          "evidence": "The agent explicitly stated they only focus on Noida, Greater Noida, Ghaziabad, and Yamuna Expressway."
+        },
+        {
+          "expectation": "Offered a market she does serve, or took the requirement down",
+          "met": true,
+          "evidence": "Kya aap Noida ya Greater Noida Expressway mein 3BHK ke options dekhna chahenge?"
+        }
+      ],
+      "overall": 4.86,
+      "judgeNotes": "The agent handled this call flawlessly, refusing to hallucinate projects in Gurgaon or Dwarka and politely offering her actual inventory areas. No improvements are needed as she executed the guardrails and language discipline perfectly.",
+      "groundedness": {
+        "claims": [],
+        "grounded": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "score": 100,
+        "checkedAt": "2026-08-08T20:24:00.165Z"
+      }
+    }
+  ],
+  "meanScore": 4.86,
+  "expectationPassRate": 1,
+  "meanGroundedness": 100
+}

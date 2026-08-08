@@ -9,9 +9,7 @@
  * problem, an unverified number returns 21219, and a disabled destination
  * returns 21212 — none of which say what to do next.
  */
-import { config as loadEnv } from "dotenv";
-loadEnv({ path: ".env.local" });
-loadEnv({ path: ".env" });
+import "./load-env.mts";
 
 import { twilioClient } from "../telephony/outbound";
 

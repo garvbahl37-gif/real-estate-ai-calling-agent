@@ -98,6 +98,18 @@ export interface CallRecord {
   toolCalls: ToolInvocation[];
   requirements: LeadRequirements;
   summary?: CallSummary;
+  /** Measured during the call. */
+  telemetry?: CallTelemetry;
+  /** Written after the call, by verifying her claims against the catalogue. */
+  groundedness?: GroundednessReport;
+  /** How the caller's engagement moved over the call. */
+  sentiment?: SentimentTrajectory;
+  /** Set when the caller asked for a human. */
+  handoff?: HandoffRequest;
+  /** Which agent profile handled the call. */
+  profileId?: string;
+  /** Set when the call came from a campaign. */
+  campaignId?: string;
 }
 
 /* ------------------------------------------------------------------ */
@@ -137,4 +149,166 @@ export interface Project {
   bestFor: Purpose[];
   /** short, spoken-friendly Hindi/Hinglish blurb the agent can read out */
   pitchHinglish: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Telemetry                                                           */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What a voice call is actually judged on, measured rather than felt.
+ *
+ * Time-to-first-audio is the number a caller experiences as "is she slow?" —
+ * everything else is context for explaining it. Barge-ins and reconnects are
+ * here because both were the cause of regressions that took a long time to
+ * find by ear.
+ */
+export interface TurnMetric {
+  /** ms from the caller's turn ending to the first byte of her audio. */
+  timeToFirstAudioMs: number;
+  /** ms of audio she produced for this turn. */
+  spokenMs: number;
+  at: number;
+}
+
+export interface ToolMetric {
+  name: string;
+  durationMs: number;
+  at: number;
+}
+
+export interface CallTelemetry {
+  turns: TurnMetric[];
+  tools: ToolMetric[];
+  bargeIns: number;
+  reconnects: number;
+  /** Populated from the Live API's usageMetadata when it arrives. */
+  promptTokens?: number;
+  responseTokens?: number;
+  totalTokens?: number;
+  /** Set once the call ends; derived, not measured. */
+  medianTtfaMs?: number;
+  p95TtfaMs?: number;
+  estimatedCostUsd?: number;
+}
+
+/* ------------------------------------------------------------------ */
+/* Groundedness                                                        */
+/* ------------------------------------------------------------------ */
+
+export type ClaimVerdict = "grounded" | "unsupported" | "contradicted" | "unverifiable";
+
+/**
+ * One factual assertion the agent made, checked against the catalogue.
+ *
+ * A wrong possession date is a RERA liability, not a cosmetic error, so claims
+ * are extracted and verified rather than trusted.
+ */
+export interface FactClaim {
+  /** Her words, quoted. */
+  quote: string;
+  /** What is being asserted, normalised. */
+  claim: string;
+  kind: "price" | "possession" | "distance" | "amenity" | "rera" | "availability" | "other";
+  projectId?: string;
+  verdict: ClaimVerdict;
+  /** The catalogue value it was checked against, when there is one. */
+  evidence?: string;
+  note?: string;
+}
+
+export interface GroundednessReport {
+  claims: FactClaim[];
+  grounded: number;
+  unsupported: number;
+  contradicted: number;
+  /** 0–100. 100 means every checkable claim matched the catalogue. */
+  score: number;
+  checkedAt: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sentiment                                                           */
+/* ------------------------------------------------------------------ */
+
+export type SentimentLabel = "engaged" | "neutral" | "hesitant" | "annoyed" | "disengaged";
+
+export interface SentimentPoint {
+  /** Index into the transcript this reading covers. */
+  turnIndex: number;
+  label: SentimentLabel;
+  /** −1 (cold) … +1 (warm). */
+  score: number;
+}
+
+export interface SentimentTrajectory {
+  points: SentimentPoint[];
+  /** Positive means the caller warmed over the call. */
+  drift: number;
+  opening: SentimentLabel;
+  closing: SentimentLabel;
+  note: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Human handoff                                                       */
+/* ------------------------------------------------------------------ */
+
+export interface HandoffRequest {
+  requestedAt: number;
+  reason: string;
+  urgency: "now" | "callback";
+  /** Set once a human picks it up. */
+  acceptedAt?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Agent profiles — one deployment, many developers                    */
+/* ------------------------------------------------------------------ */
+
+export interface AgentProfile {
+  id: string;
+  agentName: string;
+  companyName: string;
+  /** Markets this agent may claim to operate in. */
+  markets: string[];
+  voice: string;
+  defaultLanguage: Language;
+  /** Project ids from the catalogue this profile is allowed to sell. */
+  projectIds: string[];
+  /** Free text appended to the system instruction. */
+  personaNote?: string;
+}
+
+/* ------------------------------------------------------------------ */
+/* Outbound campaigns                                                  */
+/* ------------------------------------------------------------------ */
+
+export type ContactStatus = "queued" | "calling" | "completed" | "failed" | "no_answer" | "suppressed";
+
+export interface CampaignContact {
+  id: string;
+  campaignId: string;
+  name?: string;
+  phone: string;
+  status: ContactStatus;
+  attempts: number;
+  lastAttemptAt?: string;
+  nextAttemptAt?: string;
+  callId?: string;
+  failureReason?: string;
+}
+
+export interface Campaign {
+  id: string;
+  name: string;
+  profileId: string;
+  status: "draft" | "running" | "paused" | "completed";
+  createdAt: string;
+  /** Concurrency ceiling — telephony providers rate-limit hard. */
+  maxConcurrent: number;
+  maxAttempts: number;
+  /** Local calling window, inclusive of start, exclusive of end. */
+  callWindowStartHour: number;
+  callWindowEndHour: number;
 }
