@@ -42,7 +42,10 @@ export function maskPhone(phone: string | undefined): string | undefined {
  * supposed to say, and mangling them would make a transcript useless to read.
  */
 export function scrubSpokenNumbers(text: string): string {
-  return text.replace(/(?:\d[\s-]?){9}\d/g, (m) => {
+  // `{9,}` not `{9}`: a run of exactly ten was consuming only the first ten
+  // digits of "+919810012345" and leaving "45" dangling after the mask. Greedy
+  // over the whole run instead.
+  return text.replace(/(?:\d[\s-]?){9,}\d/g, (m) => {
     const digits = m.replace(/\D/g, "");
     return `${digits.slice(0, 5)}•••${digits.slice(-2)}`;
   });
@@ -73,6 +76,7 @@ interface RedactableCall {
   summary?: unknown;
   transcript?: { text: string }[];
   toolCalls?: unknown[];
+  actions?: unknown[];
 }
 
 /**
@@ -92,6 +96,12 @@ export function redactCall<T extends RedactableCall>(call: T, includeConversatio
     // land in the headline, the next action or the agent's notes as easily as
     // in the phone field. Scrub the whole object rather than named fields.
     ...(call.summary ? { summary: redactDeep(call.summary) } : {}),
+    // Post-call delivery carries the lead onward, so it carries the number too.
+    // The calendar invite embeds it inside a generated .ics payload, which is
+    // where the production sweep found it after every structured field was
+    // already masked. Anything added to this record later needs the same
+    // treatment — that is the third time this class of leak has appeared.
+    ...(call.actions ? { actions: call.actions.map(redactDeep) } : {}),
     ...(includeConversation
       ? {
           transcript: (call.transcript ?? []).map((t) => ({ ...t, text: scrubSpokenNumbers(t.text) })),

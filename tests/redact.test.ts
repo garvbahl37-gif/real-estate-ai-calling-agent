@@ -100,6 +100,37 @@ describe("redactCall", () => {
     assert.ok(!json.includes("9810012345"), "a number leaked through the transcript or tool args");
   });
 
+  it("masks a number embedded in a generated calendar invite", () => {
+    // The .ics payload is a string carrying the lead's number, and it lives on
+    // the record under `actions`. Production found it there after every
+    // structured field was already masked.
+    const withActions = {
+      ...call,
+      actions: [
+        {
+          provider: "site-visit-invite",
+          status: "sent",
+          detail: "Invite prepared",
+          at: "2026-03-10T06:00:00.000Z",
+          durationMs: 2,
+          data: { ics: "DESCRIPTION:Lead: Rahul Verma (+919810012345)\\nRequirement: 3BHK" },
+        },
+      ],
+    } as unknown as CallRecord;
+    const json = JSON.stringify(redactCall(withActions));
+    assert.ok(!json.includes("9810012345"), "the invite leaked the number");
+  });
+
+  it("consumes the whole digit run rather than stopping at ten", () => {
+    // `{9}` matched only the first ten digits of a +91 number and left "45"
+    // dangling past the mask, so the run was split rather than hidden.
+    const out = scrubSpokenNumbers("call +919810012345 now");
+    assert.ok(!out.includes("9810012345"), `the subscriber number survived: ${out}`);
+    // Exactly one masked span — not a mask followed by leftover digits.
+    assert.equal((out.match(/•••/g) ?? []).length, 1);
+    assert.ok(!/•••\d{3,}/.test(out), `digits trailed the mask: ${out}`);
+  });
+
   it("leaves identifiers alone", () => {
     // A tool call id is a long digit run that is not a phone number; mangling
     // it would break correlation between the transcript and the tool log.
