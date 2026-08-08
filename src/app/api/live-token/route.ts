@@ -11,6 +11,7 @@ import {
   isQuotaError,
 } from "@/lib/config";
 import { buildLiveConfig } from "@/lib/live-config";
+import { getProfile } from "@/lib/profiles";
 import { RULES, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { formatZodError, tokenRequestSchema } from "@/lib/validation";
 
@@ -67,10 +68,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
   }
 
-  const voice = parsed.data.voice && VALID_VOICES.has(parsed.data.voice) ? parsed.data.voice : DEFAULT_VOICE;
   const model = parsed.data.model && isKnownLiveModel(parsed.data.model) ? parsed.data.model : LIVE_MODEL;
 
+  // The profile is resolved server-side and baked into the ephemeral token's
+  // config. A client cannot ask for one identity and then talk as another,
+  // which is the whole reason the config is locked at mint time.
+  const profile = getProfile(parsed.data.profileId);
+  const voice =
+    parsed.data.voice && VALID_VOICES.has(parsed.data.voice) ? parsed.data.voice : (profile.voice ?? DEFAULT_VOICE);
+
   const liveConfig = buildLiveConfig({
+    profile,
     voice,
     customerName: parsed.data.customerName,
     openingLanguage: parsed.data.openingLanguage,
@@ -102,7 +110,7 @@ export async function POST(req: Request) {
       if (!token.name) throw new Error("Token response contained no name");
 
       return NextResponse.json(
-        { mode: "ephemeral", token: token.name, model, voice },
+        { mode: "ephemeral", token: token.name, model, voice, profileId: profile.id },
         { headers: rateLimitHeaders(limit) },
       );
     } catch (err) {

@@ -5,7 +5,15 @@ import { mergeRequirements, runAgentTool } from "./agent-tools";
 import { CallRecorder } from "./call-recorder";
 import { TelemetryCollector, pcmDurationMs } from "./telemetry";
 import { INPUT_SAMPLE_RATE, OUTPUT_SAMPLE_RATE, arrayBufferToBase64, base64ToFloat32 } from "./audio-utils";
-import type { CallTelemetry, HandoffRequest, LeadRequirements, ToolInvocation, TranscriptTurn } from "./types";
+import type {
+  AgentProfile,
+  CallTelemetry,
+  HandoffRequest,
+  LeadRequirements,
+  OpeningLanguage,
+  ToolInvocation,
+  TranscriptTurn,
+} from "./types";
 
 export type CallState =
   | "idle"
@@ -31,7 +39,9 @@ export interface LiveCallEvents {
 export interface LiveCallOptions {
   voice?: string;
   model?: string;
-  openingLanguage?: "hindi" | "hinglish" | "english";
+  openingLanguage?: OpeningLanguage;
+  /** Who the agent is on this call — also scopes which projects the tools see. */
+  profile?: AgentProfile;
   customerName?: string;
   scenarioOverride?: string;
   /** Set only on a reconnect, so the new token resumes the same conversation. */

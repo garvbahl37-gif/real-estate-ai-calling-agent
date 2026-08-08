@@ -9,6 +9,16 @@
 
 export type Language = "hi" | "en" | "hinglish";
 
+/**
+ * Which language a call opens in.
+ *
+ * Deliberately separate from `Language`, which labels what was *detected* in a
+ * transcript turn. This is a request, not an observation, and the two were
+ * drifting apart in the spellings they used ("hi" vs "hindi") until a profile
+ * had to feed one into the other.
+ */
+export type OpeningLanguage = "hindi" | "hinglish" | "english";
+
 export type Intent = "buy" | "invest" | "rent" | "just_browsing" | "not_interested" | "unknown";
 
 export type Purpose = "self_use" | "investment" | "both" | "unknown";
@@ -273,7 +283,7 @@ export interface AgentProfile {
   /** Markets this agent may claim to operate in. */
   markets: string[];
   voice: string;
-  defaultLanguage: Language;
+  defaultLanguage: OpeningLanguage;
   /** Project ids from the catalogue this profile is allowed to sell. */
   projectIds: string[];
   /** Free text appended to the system instruction. */

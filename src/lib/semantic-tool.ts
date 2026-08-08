@@ -70,7 +70,7 @@ async function embedQuery(text: string): Promise<number[] | null> {
  */
 const MIN_SIMILARITY = 0.56;
 
-export async function findProjectsByDescription(description: string) {
+export async function findProjectsByDescription(description: string, projectIds?: string[]) {
   if (!hasIndex()) {
     return {
       error: "The semantic index has not been built. Run `pnpm embeddings`.",
@@ -89,7 +89,7 @@ export async function findProjectsByDescription(description: string) {
       guidance:
         `The caller named ${unserved}, where this developer has no projects. Say so plainly, do not ` +
         `offer anything as a substitute for it, and mention that the markets served are ` +
-        `${operatingMarkets().join(", ")}.`,
+        `${operatingMarkets(projectIds).join(", ")}.`,
       results: [],
     };
   }
@@ -102,7 +102,14 @@ export async function findProjectsByDescription(description: string) {
     };
   }
 
-  const hits = searchByVector(vector, 4).filter((h) => h.similarity >= MIN_SIMILARITY);
+  // Over-fetch, then narrow to the profile's inventory: filtering after the
+  // ranking keeps the scores comparable, and asking for 4 up front would return
+  // fewer than 4 in-scope results whenever another desk's projects rank highly.
+  const allowed = projectIds?.length ? new Set(projectIds) : null;
+  const hits = searchByVector(vector, allowed ? 20 : 4)
+    .filter((h) => h.similarity >= MIN_SIMILARITY)
+    .filter((h) => !allowed || allowed.has(h.projectId))
+    .slice(0, 4);
   if (!hits.length) {
     return {
       matchCount: 0,

@@ -19,6 +19,8 @@ export const tokenRequestSchema = z.object({
     .regex(/^[A-Za-z]+$/, "Voice must be a prebuilt voice name")
     .optional(),
   openingLanguage: languageSchema.optional(),
+  /** Which agent identity to run as. Unknown ids fall back to the default. */
+  profileId: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
   customerName: z.string().trim().max(80).optional(),
   scenarioOverride: z.string().trim().max(2000).optional(),
   // Checked against the allow-list in config, not just the shape — this string

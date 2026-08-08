@@ -794,9 +794,24 @@ export function unservedPlaceIn(text: string): string | null {
   return null;
 }
 
-/** Every market the agent operates in, derived rather than hand-maintained. */
-export function operatingMarkets(): string[] {
-  return Array.from(new Set(PROJECTS.map((p) => p.city)));
+/**
+ * Every market the agent operates in, derived rather than hand-maintained.
+ *
+ * Takes the scope it is asked about. A profile that only sells Noida stock must
+ * not tell a caller the developer operates on the Yamuna Expressway — deriving
+ * the markets from the same list the tools search is what keeps the geography
+ * rule honest per profile instead of only in aggregate.
+ */
+export function operatingMarkets(projectIds?: string[]): string[] {
+  return Array.from(new Set(scopedProjects(projectIds).map((p) => p.city)));
+}
+
+/** The catalogue narrowed to a profile's allowed ids; everything when unset. */
+export function scopedProjects(projectIds?: string[]): Project[] {
+  if (!projectIds?.length) return PROJECTS;
+  const allowed = new Set(projectIds);
+  const subset = PROJECTS.filter((p) => allowed.has(p.id));
+  return subset.length ? subset : PROJECTS;
 }
 
 /**
@@ -813,9 +828,9 @@ export function operatingMarkets(): string[] {
  * amenities, carpet areas, payment plans and possession schedule on demand.
  * That is what the tool is for.
  */
-export function projectsAsPromptContext(): string {
+export function projectsAsPromptContext(projectIds?: string[]): string {
   const byMarket = new Map<string, typeof PROJECTS>();
-  for (const p of PROJECTS) {
+  for (const p of scopedProjects(projectIds)) {
     const key = `${p.city}${p.microMarket && p.microMarket !== p.city ? ` — ${p.microMarket}` : ""}`;
     byMarket.set(key, [...(byMarket.get(key) ?? []), p]);
   }

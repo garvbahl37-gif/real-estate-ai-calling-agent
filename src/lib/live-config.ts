@@ -1,5 +1,5 @@
 import { Modality, type LiveConnectConfig } from "@google/genai";
-import { AGENT_FUNCTION_DECLARATIONS } from "./agent-tools";
+import { agentFunctionDeclarations } from "./agent-tools";
 import { DEFAULT_VOICE, buildSystemInstruction, type PromptOptions } from "./agent-prompt";
 
 /**
@@ -80,7 +80,10 @@ export interface LiveConfigOptions extends PromptOptions {
 }
 
 export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig {
-  const { voice = DEFAULT_VOICE, resumeHandle, channel = "browser", affectiveDialog = false, ...promptOpts } = opts;
+  const { resumeHandle, channel = "browser", affectiveDialog = false, ...promptOpts } = opts;
+  // Voice belongs to the profile; an explicit option still wins so a single
+  // profile can be auditioned in different voices without editing it.
+  const voice = opts.voice ?? promptOpts.profile?.voice ?? DEFAULT_VOICE;
 
   // Order matters, and it is not cosmetic. The first entry is the ASR's primary
   // hypothesis, so with hi-IN leading it renders English speech in Devanagari —
@@ -90,7 +93,8 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
   //
   // Both languages stay listed either way, so a caller who switches mid-call is
   // still transcribed correctly; only the default hypothesis moves.
-  const languageCodes = promptOpts.openingLanguage === "english" ? ["en-IN", "hi-IN"] : ["hi-IN", "en-IN"];
+  const openingLanguage = promptOpts.openingLanguage ?? promptOpts.profile?.defaultLanguage;
+  const languageCodes = openingLanguage === "english" ? ["en-IN", "hi-IN"] : ["hi-IN", "en-IN"];
 
   return {
     responseModalities: [Modality.AUDIO],
@@ -114,7 +118,7 @@ export function buildLiveConfig(opts: LiveConfigOptions = {}): LiveConnectConfig
     },
     outputAudioTranscription: { languageCodes },
 
-    tools: [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }],
+    tools: [{ functionDeclarations: agentFunctionDeclarations({ projectIds: promptOpts.profile?.projectIds }) }],
 
     realtimeInputConfig: {
       automaticActivityDetection: {

@@ -1,4 +1,5 @@
 import { operatingMarkets, projectsAsPromptContext } from "./projects";
+import type { AgentProfile, OpeningLanguage } from "./types";
 
 export const AGENT_NAME = "Priya";
 export const COMPANY_NAME = "Aarambh Realty";
@@ -20,11 +21,34 @@ export const VOICES = [
 export type VoiceId = (typeof VOICES)[number]["id"];
 export const DEFAULT_VOICE: VoiceId = "Aoede";
 
+/**
+ * The identity used when no profile is supplied. Declared here rather than
+ * imported from ./profiles so that module can import this one for its voice
+ * list without a cycle.
+ */
+export const DEFAULT_PROFILE: AgentProfile = {
+  id: "priya-residential",
+  agentName: AGENT_NAME,
+  companyName: COMPANY_NAME,
+  markets: [],
+  voice: DEFAULT_VOICE,
+  defaultLanguage: "hinglish",
+  projectIds: [],
+};
+
 export interface PromptOptions {
+  /**
+   * Who she is on this call — name, company, and the inventory she may sell.
+   *
+   * The catalogue section and the geography rule are both derived from this,
+   * so a profile restricted to the commercial desk cannot describe residential
+   * markets it does not cover.
+   */
+  profile?: AgentProfile;
   /** Name the agent should use if the caller is known (outbound campaigns). */
   customerName?: string;
   /** Bias the opening language. The agent still mirrors whatever the caller uses. */
-  openingLanguage?: "hindi" | "hinglish" | "english";
+  openingLanguage?: OpeningLanguage;
   /** Extra scenario instructions typed by the interviewer at demo time. */
   scenarioOverride?: string;
 }
@@ -69,8 +93,8 @@ Numbers: say them the Indian way — "ek crore bees lakh", "pachhattar lakh", "d
 "saade teen crore". Never "one hundred and twenty lakhs".
 `;
 
-const PERSONA = `
-You are ${AGENT_NAME}, a senior sales executive at ${COMPANY_NAME}, a residential real-estate
+const persona = (p: AgentProfile) => `
+You are ${p.agentName}, a senior sales executive at ${p.companyName}, a real-estate
 developer in the Delhi NCR market. You are on a live phone call with a prospective buyer.
 
 You sound like an actual person doing this job: warm, quick, a little bit busy, genuinely
@@ -162,7 +186,7 @@ Never read a tool call out loud. Never say "let me search our database" — just
 floor ("ek second sir, main check karti hoon") and continue.
 `;
 
-const GUARDRAILS = `
+const guardrails = (p: AgentProfile, markets: string[]) => `
 ## Hard rules — do not break these
 
 - **No guaranteed returns.** Never say a property "will definitely appreciate", "guaranteed 20%
@@ -174,8 +198,8 @@ const GUARDRAILS = `
   karke aapko batati hoon."
 - **No invented facts.** If it is not in the project catalogue, you do not know it. Say so and
   offer to find out. Never guess a price, a distance, or an approval status.
-- **Geography is a fact, not a guess.** ${COMPANY_NAME} operates ONLY in these markets:
-  ${operatingMarkets().join(", ")}, plus the Yamuna Expressway corridor. Nothing in Gurgaon, Delhi
+- **Geography is a fact, not a guess.** ${p.companyName} operates ONLY in these markets:
+  ${markets.join(", ")}, plus the Yamuna Expressway corridor. Nothing in Gurgaon, Delhi
   itself, Faridabad, Mumbai, Pune or Bengaluru. Never imply otherwise, never mention a location that
   is not in the catalogue below, and never claim the caller enquired about a specific place unless
   they said so themselves. If they name somewhere you don't cover — Lajpat Nagar, Dwarka, Gurgaon —
@@ -217,7 +241,9 @@ const RECOVERY = `
 `;
 
 export function buildSystemInstruction(opts: PromptOptions = {}): string {
-  const { customerName, openingLanguage = "hinglish", scenarioOverride } = opts;
+  const profile = opts.profile ?? DEFAULT_PROFILE;
+  const projectIds = profile.projectIds?.length ? profile.projectIds : undefined;
+  const { customerName, openingLanguage = profile.defaultLanguage, scenarioOverride } = opts;
 
   const openingHint =
     openingLanguage === "hindi"
@@ -231,18 +257,19 @@ export function buildSystemInstruction(opts: PromptOptions = {}): string {
     : "You do not know the caller's name yet. Ask for it naturally partway through, not in the first line.";
 
   return [
-    PERSONA,
+    persona(profile),
+    profile.personaNote ? `\n${profile.personaNote}\n` : "",
     LANGUAGE_POLICY,
     FLOW,
     TOOLS_POLICY,
-    GUARDRAILS,
+    guardrails(profile, operatingMarkets(projectIds)),
     RECOVERY,
     `
 ## Your project catalogue
 
 These are the ONLY projects you can sell. Everything you say about them must come from here.
 
-${projectsAsPromptContext()}
+${projectsAsPromptContext(projectIds)}
 `,
     `
 ## This call

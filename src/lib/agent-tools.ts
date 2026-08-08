@@ -1,5 +1,5 @@
 import { Type, type FunctionDeclaration } from "@google/genai";
-import { PROJECTS, formatInr, getProject } from "./projects";
+import { PROJECTS, formatInr, getProject, scopedProjects } from "./projects";
 import { findProjectsByDescription } from "./semantic-tool";
 import type { LeadRequirements, Project } from "./types";
 
@@ -389,8 +389,17 @@ const ASYNC_TOOLS = new Set(["find_projects_by_description"]);
  * Keeping this function pure is what makes the tool path testable without
  * mocks and instant on a voice call.
  */
-export function executeAgentTool(name: string, rawArgs: Record<string, unknown>): ToolExecutionResult {
+export function executeAgentTool(
+  name: string,
+  rawArgs: Record<string, unknown>,
+  scope?: ToolScope,
+): ToolExecutionResult {
   const args = rawArgs ?? {};
+  // The profile's inventory. Everything the agent can search, quote or name has
+  // to come from here — a profile that restricts the catalogue but leaves the
+  // tools searching all of it is decoration, because the tools are what she
+  // actually reads her answers from.
+  const catalogue = scopedProjects(scope?.projectIds);
 
   switch (name) {
     case "update_lead_requirements": {
@@ -413,7 +422,7 @@ export function executeAgentTool(name: string, rawArgs: Record<string, unknown>)
 
     case "search_projects": {
       const a = args as Parameters<typeof scoreProject>[1];
-      const ranked = PROJECTS.map((p) => {
+      const ranked = catalogue.map((p) => {
         const { score, reasons, blockers } = scoreProject(p, a);
         return { p, score, reasons, blockers };
       }).sort((x, y) => y.score - x.score);
@@ -453,12 +462,15 @@ export function executeAgentTool(name: string, rawArgs: Record<string, unknown>)
     }
 
     case "get_project_details": {
-      const p = getProject(String(args.projectId ?? ""));
+      const wanted = String(args.projectId ?? "");
+      // Out-of-scope ids are treated exactly like ids that do not exist. She
+      // must not be able to read out another desk's inventory by naming it.
+      const p = catalogue.some((x) => x.id === wanted) ? getProject(wanted) : undefined;
       if (!p) {
         return {
           response: {
             error: "No such project in the catalogue.",
-            validIds: PROJECTS.map((x) => x.id),
+            validIds: catalogue.map((x) => x.id),
             guidance: "Do not invent details. Tell the caller you'll confirm and get back to them.",
           },
         };
@@ -555,17 +567,54 @@ export function executeAgentTool(name: string, rawArgs: Record<string, unknown>)
   }
 }
 
+/** Which inventory the agent speaking on this call is allowed to sell. */
+export interface ToolScope {
+  projectIds?: string[];
+}
+
 /**
  * What call sites use. Dispatches the one networked tool and delegates
  * everything else to the pure executor, so the async boundary lives in exactly
  * one place instead of spreading through every transport.
  */
-export async function runAgentTool(name: string, rawArgs: Record<string, unknown>): Promise<ToolExecutionResult> {
+export async function runAgentTool(
+  name: string,
+  rawArgs: Record<string, unknown>,
+  scope?: ToolScope,
+): Promise<ToolExecutionResult> {
   if (ASYNC_TOOLS.has(name)) {
-    const response = await findProjectsByDescription(String((rawArgs ?? {}).description ?? ""));
+    const response = await findProjectsByDescription(String((rawArgs ?? {}).description ?? ""), scope?.projectIds);
     return { response: response as Record<string, unknown> };
   }
-  return executeAgentTool(name, rawArgs);
+  return executeAgentTool(name, rawArgs, scope);
+}
+
+/**
+ * The declarations, narrowed to what this profile may sell.
+ *
+ * The executor already refuses out-of-scope ids, so this is not the security
+ * boundary — it is an honesty one. Advertising fifteen project ids in the enum
+ * while the prompt's catalogue lists five invites the model to try one of the
+ * ten it cannot have, and a refused tool call mid-sentence is audible to the
+ * caller as a stumble.
+ */
+export function agentFunctionDeclarations(scope?: ToolScope): FunctionDeclaration[] {
+  const ids = scopedProjects(scope?.projectIds).map((p) => p.id);
+  if (ids.length === PROJECTS.length) return AGENT_FUNCTION_DECLARATIONS;
+
+  return AGENT_FUNCTION_DECLARATIONS.map((decl) => {
+    const props = decl.parameters?.properties;
+    if (!props) return decl;
+    // Only the project-id enums are rewritten; every other field is shared.
+    const rewritten = Object.fromEntries(
+      Object.entries(props).map(([key, schema]) => {
+        const s = schema as { enum?: string[] };
+        const isProjectIdEnum = s.enum && s.enum.length === PROJECTS.length && s.enum.includes(PROJECTS[0].id);
+        return [key, isProjectIdEnum ? { ...s, enum: ids } : schema];
+      }),
+    );
+    return { ...decl, parameters: { ...decl.parameters, properties: rewritten } };
+  });
 }
 
 /** Later values win, but a later `undefined` never clears an earlier value. */
