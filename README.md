@@ -144,7 +144,14 @@ recovery section of the prompt is for.
 | ![Projects](docs/screenshots/05-projects-ladder.png) | ![Project detail](docs/screenshots/06-project-detail.png) |
 | **The catalogue, on a budget axis.** Every project's price band on one log scale — you can see why ₹1.5 Cr and ₹2.5 Cr reach different projects. | **One project.** What `get_project_details` returns when a caller asks something specific. |
 | ![Leads](docs/screenshots/08-leads.png) | ![Lead detail](docs/screenshots/09-lead-detail.png) |
-| **Leads.** Every call, scored. | **A lead.** Summary, objections, next action, the full transcript, and every tool call. |
+| **Leads.** Every call, scored. Phone numbers are masked — see [Handling other people's data](#handling-other-peoples-data). | **A lead.** Summary, objections, next action, the full transcript, and every tool call. |
+
+![Operations](docs/screenshots/10-ops.png)
+
+**Operations.** Eval scores by rubric dimension and by persona, latency percentiles, factual
+accuracy, campaign progress and post-call delivery. A persona the judge could not reach reads
+`unjudged`, not `0.00` — the distinction matters, and getting it wrong once already sent me
+debugging an agent that was fine.
 
 ![Call summary](docs/screenshots/04-call-summary.png)
 *The post-call summary — headline, qualification score with reasoning, objections raised, and the
@@ -168,7 +175,8 @@ documentation.*
 | Storage | Neon Postgres (free), in-memory fallback | Clone-and-run works with no database. |
 | Telephony | Twilio Media Streams ↔ Node WebSocket bridge | Optional. Same agent, different transport. |
 | Hosting | Vercel | Free tier. |
-| Tests | `node:test` + Playwright | 40 unit tests, plus scripted live-call E2E. |
+| Retrieval | `gemini-embedding-001`, 768d, committed index | Semantic search over the catalogue with no vector database. |
+| Tests | `node:test` + Playwright | 135 unit tests, an adversarial eval suite, and a layout audit. |
 
 **AI models used:** `gemini-3.1-flash-live-preview` for the conversation and `gemini-3.5-flash` for
 summarisation. Both are free of charge on the Gemini Developer API free tier and were verified
@@ -283,6 +291,35 @@ pnpm dev                                            # → http://localhost:3000
 
 No database needed — it falls back to an in-memory store. Set `DATABASE_URL` for persistence.
 
+```bash
+pnpm test        # 135 unit tests
+pnpm eval        # the adversarial persona suite (spends Gemini quota)
+pnpm embeddings  # rebuild the catalogue vector index after editing projects.ts
+node scripts/audit.mjs   # 7 pages × 3 breakpoints, against a running server
+```
+
+### Environment
+
+Only `GEMINI_API_KEY` is required. Everything else adds a capability, and anything
+that can reach a real person is off until it is set.
+
+| Variable | Effect if unset |
+|---|---|
+| `GEMINI_API_KEY` | **Required.** Comma-separate several keys to fall through on quota. |
+| `DATABASE_URL` | In-memory store; calls do not survive a restart. |
+| `GEMINI_LIVE_MODEL` | Defaults to `gemini-3.1-flash-live-preview`. |
+| `OPS_ADMIN_TOKEN` | Campaign management, bulk reads and deletes stay closed. |
+| `CAMPAIGNS_ENABLED` | The queue runs in full but dials nobody. |
+| `CRON_SECRET` | Falls back to `OPS_ADMIN_TOKEN` for the dispatcher cron. |
+| `CRM_WEBHOOK_URL` / `CRM_WEBHOOK_SECRET` | Lead delivery reports itself unconfigured. |
+| `WHATSAPP_TOKEN` / `WHATSAPP_PHONE_ID` | WhatsApp recap reports itself unconfigured. |
+| `TWILIO_*`, `TELEPHONY_PUBLIC_HOST` | Phone transport disabled; browser demo unaffected. |
+
+The two campaign switches are deliberately separate. `OPS_ADMIN_TOKEN` decides who
+may manage a campaign; `CAMPAIGNS_ENABLED` decides whether a real call may be
+placed at all. A deployment with the first and not the second is fully
+explorable and cannot ring anyone's phone — which is how this one ships.
+
 ### Recording the demo
 
 When a call ends the console offers **Download recording (.wav)** — the whole conversation as a
@@ -355,9 +392,174 @@ in 20 ms base64 frames — and asserts real audio comes back.
 
 ---
 
+## Knowing whether she is actually working
+
+A voice agent demos well and fails quietly. It sounds fluent, so the natural
+assumption is that it is right — and on a sales call in Indian real estate, being
+wrong about a possession date or a RERA registration is a regulatory problem, not
+a typo. Everything in this section exists because a transcript cannot tell you
+which kind of agent you have. There is an **Operations** page in the app that
+renders all of it.
+
+### The eval suite — `pnpm eval`
+
+Twelve adversarial callers, each played by a text model that reads the
+conversation and reacts, run against a real Live session. Not scripted: a script
+only ever tests the path it was written for and cannot punish the agent for
+mishandling the previous turn.
+
+The set is chosen for the ways *this* agent has actually failed — language drift,
+inventing a project in a city we do not serve, refusing to hang up, pitching over
+a "no". Each conversation is then scored by a judge against a seven-dimension
+rubric, plus per-persona checks.
+
+```
+overall            4.57 / 5      (9 personas scored)
+expectations met   86%
+groundedness       86/100
+
+Language discipline        ████·  4.33
+Naturalness                █████  4.67
+Requirement qualification  ████·  4.00
+Factual accuracy           █████  4.67
+Guardrails                 █████  5.00
+Handling the difficult bit ████·  4.44
+Closing                    █████  4.89
+```
+
+### Groundedness — checking what she claimed
+
+A model is good at *finding* assertions in a transcript and bad at adjudicating
+them; asking "is this true?" just returns a second opinion with the same blind
+spots. So only extraction is delegated — the model returns quoted claims with a
+normalised value — and the verdict is computed in code against the catalogue.
+
+To check it does anything, it was given a call where the agent lies five times: a
+₹75 Lakh 3BHK, a possession date twenty months early, an invented helipad, a
+false claim to have verified the RERA number, and an offer of a sold-out unit.
+
+It caught two. Both misses were worth fixing and are described under
+[Challenges](#challenges). It now catches five.
+
+### Latency
+
+Time to first audio — from the caller finishing to her voice starting — as p50
+and p95. The mean is the wrong statistic: a p95 of three seconds is a call that
+felt broken twice, however good the median was.
+
+---
+
+## Beyond one call
+
+### Outbound campaigns
+
+Upload a contact list, dial it under a concurrency ceiling, retry what does not
+connect, stop at 21:00.
+
+The contact table is a **queue**, not a record store, so claiming uses
+`SELECT … FOR UPDATE SKIP LOCKED`. Two dispatcher ticks overlapping is routine on
+Vercel — a cron firing while the previous tick is still placing calls — and
+without it both read the same rows and both dial them. A separate reclaim returns
+contacts leaked by a function that died mid-tick, which would otherwise consume a
+concurrency slot forever and never be retried.
+
+The 09:00–21:00 window is **TRAI's**, not a preference. It is enforced in the
+dispatcher rather than left to whoever configures a campaign, and the API clamps a
+configured window to it rather than trusting the request. Retries are scheduled
+through the same function, so a contact that fails at 20:58 does not get its
+45-minute retry at 21:43. The offset is fixed at +5:30 because India has not
+observed DST since 1945 — Vercel runs UTC, and the rule is about the person being
+called.
+
+**Dialling is off by default**, and needs two switches: `OPS_ADMIN_TOKEN` for who
+may manage a campaign, `CAMPAIGNS_ENABLED` for whether a real call may be placed
+at all. With the second unset the queue still runs completely — claiming, backing
+off, respecting the window — through a placer that dials nothing and *releases*
+its claim rather than consuming a retry. The engine is observable without
+anyone's phone ringing.
+
+### Agent profiles
+
+An identity is not a skin. A profile fixes the name, the voice, the opening
+language and — the part that makes it real — **which projects she may sell**.
+
+The tools are what she reads her answers from, so a profile that changes the
+greeting while leaving the executor searching the whole catalogue is decoration.
+The scope is threaded into the ranked search, the semantic search,
+`get_project_details` (an out-of-scope id is treated exactly like one that does
+not exist) and the prompt's catalogue section. The markets she claims to operate
+in are *derived* from the same list, so a desk restricted to Noida cannot tell a
+caller the developer operates on the Yamuna Expressway.
+
+The profile is resolved server-side and baked into the ephemeral token, so a
+client cannot request one identity and talk as another.
+
+### Semantic retrieval
+
+Callers describe what they want in ways structured filters cannot express —
+"somewhere quiet for my parents", "good rental demand", "close to the new
+airport". The catalogue is embedded and searched by meaning.
+
+Worth recording *why the threshold is not the answer*. Measured across a probe
+set, relevant queries bottom out at 0.590 and off-topic ones top out at 0.540 —
+but "office space in Bangalore Koramangala" scores **0.628**, above every relevant
+query, because a Noida commercial project genuinely is about office space and the
+only wrong thing is the city. A city is not a semantic property, so no threshold,
+absolute or z-scored, separates these. Geography is gated deterministically
+instead; the similarity floor only has to catch true off-topic. 15/15 on the probe
+set, against 12/15 before.
+
+### Post-call delivery
+
+A qualified lead sitting in a database is worth nothing. Destinations sit behind
+one provider interface, and the runner guarantees none of them can hurt a call:
+the transcript and summary are already saved before they run, each is bounded in
+time, and "not configured" is reported differently from "tried and failed".
+
+Two do real work with no paid dependency — a **CRM webhook** that POSTs the lead
+with an idempotency key, and a **site-visit calendar invite** (RFC 5545, folded to
+75 octets without splitting a UTF-8 character, because this catalogue is full of
+₹ and Devanagari). WhatsApp Business has no free tier, so that provider is written
+against the real Graph API and reports itself unconfigured rather than faking a
+send.
+
+---
+
+## Handling other people's data
+
+The numbers in this demo are real. Whoever tries the agent types their own mobile,
+and a campaign list is third parties who never touched the system at all.
+
+A pre-delivery audit found the campaign detail endpoint returning uploaded
+contacts to anyone who read an id out of the public campaign list — a complete
+chain to dump a marketing list, unauthenticated. That is fixed, and the sweep that
+found it now runs over every surface.
+
+Masking the phone *fields* turned out not to be enough, which is the part worth
+knowing: the caller reads their number out loud, so it also sits verbatim in the
+transcript, in the tool call that captured it, and potentially in the
+model-written summary. The scrub runs over free text and nested tool arguments,
+matching runs of ten or more digits — deliberately not fewer, because "Sector 150"
+and "1.5 crore" are numbers this agent is supposed to say.
+
+The policy, applied consistently:
+
+| | |
+|---|---|
+| Bulk third-party data | Operator token required |
+| Destructive routes | Operator token required |
+| Everything else | Open, but degrades by masking rather than refusing |
+
+Taking the demo offline to protect one field would be the wrong trade. Sweep
+result: **0 full mobile numbers** across six surfaces anonymously, operator access
+unaffected, transcripts still readable.
+
+---
+
 ## Challenges
 
-Six problems, none of which were in any documentation.
+Six problems in the voice layer, none of which were in any documentation — and three more
+that only a deliberate attempt to break my own work turned up.
 
 **Ephemeral tokens silently drop your config.** The agent connected, spoke fluently, and introduced
 itself as *"Gemini"* in English. The system instruction was never applied. The Live API treats the
@@ -398,6 +600,43 @@ A seventh, smaller one: `vercel env pull` rewrites `.env.local` with **quoted** 
 `vercel env add` from that file uploaded the API key wrapped in quotes. Production reported
 `API key not valid` while the key itself was correct — the health endpoint reporting key *length* is
 what made it obvious (55 chars vs 53).
+
+### Three found by attacking my own work
+
+These are the ones I am most glad to have. All three were silent: nothing threw,
+nothing logged, and each would have looked fine in a demo.
+
+**The accuracy checker could be walked past.** Feeding it a call where the agent
+lies five times, it caught two. The extractor received only *her* turns, on the
+reasoning that hers are the only ones being checked — but real answers are
+elliptical. The caller asks "Skyline Greens ka 3BHK kitne ka hai?" and two turns
+later she says "possession March 2026 mein ho jayega" without naming the project
+again. Stripped of the question there is nothing to attribute the claim to, so it
+came back unattributed, and an unattributed claim can only be called
+*unverifiable* — which is excluded from the score rather than counted against it.
+The net effect: an agent could fabricate freely so long as she never repeated the
+project name.
+
+The second miss was subtler. The RERA over-claim rule matched English past tense
+— "verified", "checked". She says it in Hinglish: *"Maine RERA registration khud
+verify kiya hai"*, where the verb is the bare English stem carrying a Hindi
+auxiliary. The pattern sailed straight past it. Both fixed; 5/5 now.
+
+**Campaigns closed themselves with work outstanding.** A contact awaiting a retry
+sits in `no_answer` with a future timestamp — neither `queued` nor `calling`. The
+completion check looked at only those two, so the first tick after a no-answer
+found nothing to claim, concluded everything was settled, and marked the campaign
+complete. Completed campaigns are then dropped by the dispatcher, so the retry
+never fired. Not an error — just a lead quietly never called again.
+
+**The eval harness was scoring the agent for its own mistake.** It hardcoded a
+Hinglish opening for every persona. The agent speaks first, before hearing
+anything, so she cannot mirror a language she has not heard — in the product that
+comes from the caller's selection. The English-only and Hindi-only personas were
+greeted in Hinglish and marked down for it; all four unmet expectations in that
+run traced back to the harness. Separately, three personas showed `0.00/5` when the
+*judge* ran out of quota, which is indistinguishable from an agent that failed
+catastrophically. An unjudged run now says so instead of reporting a zero.
 
 ---
 
@@ -452,11 +691,25 @@ src/lib/live-session.ts     browser: mic, socket, tools, transcript, reconnect
 src/lib/summarize.ts        post-call structured summary + lead scoring
 src/lib/store.ts            Postgres / in-memory persistence
 src/lib/rate-limit.ts       per-IP and global daily caps
+src/lib/telemetry.ts        time-to-first-audio, tool latency, barge-ins, cost
+src/lib/groundedness.ts     extracts her factual claims, verifies them against the catalogue
+src/lib/sentiment.ts        how the caller's engagement moved across the call
+src/lib/retrieval.ts        vector search over the catalogue
+src/lib/semantic-tool.ts    "somewhere quiet for my parents" → projects, gated on geography
+src/lib/profiles.ts         agent identities, each scoped to its own inventory
+src/lib/redact.ts           phone masking, incl. numbers spoken aloud in a transcript
+src/lib/ops-auth.ts         operator token + the two switches that gate real dialling
+src/lib/campaigns/          outbound engine: CSV, durable queue, TRAI hours, retries
+src/lib/actions/            post-call delivery behind one provider interface
+src/lib/eval/               adversarial personas, rubric, LLM judge
 public/worklets/            pcm-recorder.js (16 kHz capture), pcm-player.js (24 kHz playback)
 telephony/audio.ts          G.711 μ-law codec + resampling
 telephony/bridge.ts         one phone call: Twilio ↔ Gemini
 telephony/server.ts         TwiML webhook + WebSocket server
-tests/                      33 unit tests
+src/app/ops/                the operations dashboard
+tests/                      135 unit tests
+scripts/eval.mts            runs the persona suite and scores it
+scripts/audit.mjs           7 pages × 3 breakpoints: overflow, labels, targets, errors
 scripts/                    live-call E2E + Twilio protocol simulator
 ```
 

@@ -3,7 +3,7 @@ import path from "node:path";
 import type { Metadata } from "next";
 import { describeProviders } from "@/lib/actions/runner";
 import { allCampaignProgress, listCampaigns } from "@/lib/campaigns/store";
-import { aggregate, type EvalRun } from "@/lib/eval/types";
+import { aggregate, scoredResults, type EvalRun } from "@/lib/eval/types";
 import { callingEnabled } from "@/lib/ops-auth";
 import { listCallAnalytics, storageBackend, type CallAnalyticsRow } from "@/lib/store";
 import type { Campaign } from "@/lib/types";
@@ -174,6 +174,8 @@ export default async function OpsPage() {
   const accuracy = accuracyStats(calls);
   const providers = describeProviders();
   const rubric = run ? aggregate(run) : [];
+  // A persona the judge could not score is not a persona that scored zero.
+  const scored = run ? scoredResults(run) : [];
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -216,7 +218,11 @@ export default async function OpsPage() {
                   k="Mean score"
                   v={`${run.meanScore.toFixed(2)} / 5`}
                   tone={run.meanScore >= 4 ? "good" : "bad"}
-                  sub={`${run.results.length} persona${run.results.length === 1 ? "" : "s"}`}
+                  sub={
+                    scored.length === run.results.length
+                      ? `${run.results.length} personas`
+                      : `${scored.length} of ${run.results.length} scored`
+                  }
                 />
                 <Stat
                   k="Expectations met"
@@ -290,15 +296,18 @@ export default async function OpsPage() {
                           <tr key={r.personaId} className="border-rule-2 border-b">
                             <td className="text-ink py-2.5 pr-4 align-top text-[13px] font-medium">{r.personaLabel}</td>
                             <td className="text-ink-3 py-2.5 pr-4 align-top text-[11.5px] leading-snug">
-                              {r.expectations.filter((e) => e.met).length}/{r.expectations.length} checks
+                              {r.scores.length ? `${r.expectations.filter((e) => e.met).length}/${r.expectations.length} checks` : "—"}
                             </td>
+                            {/* An unreachable judge reads as a catastrophic failure if
+                                rendered as 0.00, which is the same mistake the CLI made. */}
                             <td
                               className={cn(
                                 "tnum py-2.5 pr-4 align-top font-mono text-[12.5px]",
-                                r.overall >= 4 ? "text-aqua" : "text-magenta",
+                                !r.scores.length ? "text-ink-3" : r.overall >= 4 ? "text-aqua" : "text-magenta",
                               )}
+                              title={!r.scores.length ? r.error : undefined}
                             >
-                              {r.overall.toFixed(2)}
+                              {r.scores.length ? r.overall.toFixed(2) : "unjudged"}
                             </td>
                             <td className="text-ink-3 tnum py-2.5 align-top font-mono text-[12px]">{r.turnCount}</td>
                           </tr>
