@@ -132,6 +132,8 @@ export const updateCallSchema = z
     handoff: handoffSchema.optional(),
     profileId: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
     campaignId: z.string().max(64).regex(/^[A-Za-z0-9_-]+$/).optional(),
+    /** Twilio's own call SID, which is how a campaign contact is keyed. */
+    twilioCallSid: z.string().regex(/^CA[0-9a-f]{32}$/).optional(),
     status: z.enum(["in_progress", "completed", "failed"]).optional(),
     endedAt: z.iso.datetime().optional(),
     durationSec: z.number().int().nonnegative().max(86_400).optional(),

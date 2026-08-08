@@ -1,9 +1,4 @@
-/**
- * Not marked `server-only`: this module is shared between the API routes and
- * the eval CLI, and that guard throws under a plain Node runner. Nothing here
- * holds a secret directly — credentials come from ./config, which is only ever
- * reached from server code.
- */
+import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
 import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isQuotaError } from "./config";
 import type { CallRecord, SentimentLabel, SentimentTrajectory } from "./types";

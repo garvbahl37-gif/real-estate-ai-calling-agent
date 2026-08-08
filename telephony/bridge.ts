@@ -387,6 +387,9 @@ export class PhoneCallBridge {
                 status: "completed",
                 endedAt: new Date().toISOString(),
                 durationSec: Math.round(this.elapsed / 1000),
+                // Lets the campaign engine mark this contact as reached. Sent
+                // only on the final write, because that is when it is true.
+                ...(this.callSid ? { twilioCallSid: this.callSid } : {}),
               }
             : {}),
         }),

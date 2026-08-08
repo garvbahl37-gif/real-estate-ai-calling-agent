@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { settleContactByCallId } from "@/lib/campaigns/store";
 import { RULES, checkRateLimit } from "@/lib/rate-limit";
 import { deleteCall, getCall, updateCall } from "@/lib/store";
 import { callIdSchema, formatZodError, updateCallSchema } from "@/lib/validation";
@@ -33,9 +34,19 @@ export async function PATCH(req: Request, ctx: Ctx) {
   const parsed = updateCallSchema.safeParse(raw);
   if (!parsed.success) return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 });
 
+  const { twilioCallSid, ...patch } = parsed.data;
+
   try {
-    const call = await updateCall(id.data, parsed.data);
+    const call = await updateCall(id.data, patch);
     if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
+
+    // Closing the loop for a campaign dial. The dispatcher knows the contact by
+    // Twilio's call SID; the bridge is what knows the call has ended. A contact
+    // is only completed here — when the call is over — rather than when it was
+    // placed, so a number that rang out is not counted as a contact made.
+    if (twilioCallSid && patch.status === "completed") {
+      await settleContactByCallId(twilioCallSid, "completed").catch(() => {});
+    }
     return NextResponse.json({ call });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
