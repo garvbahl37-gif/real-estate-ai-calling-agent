@@ -137,12 +137,25 @@ export async function tickCampaign(
 
   const claimed = await claimDueContacts(campaign.id, slots, now);
   if (!claimed.length) {
-    // Nothing due and nothing in flight means every contact is settled.
-    if (progress.calling === 0 && progress.queued === 0) {
+    // A campaign is finished only when nothing can still happen to it.
+    //
+    // Checking `queued` and `calling` alone is not enough, and getting this
+    // wrong loses leads silently: a contact awaiting a retry sits in
+    // `no_answer` with a future nextAttemptAt, so it is neither queued nor
+    // calling. Closing the campaign on that basis marks it completed, and
+    // runningCampaigns() then drops it — so the retry never happens and nobody
+    // is told. `noAnswer` here counts exactly those pending retries, because a
+    // contact that has exhausted its attempts is moved to `failed`.
+    const pendingRetries = progress.noAnswer;
+    if (progress.calling === 0 && progress.queued === 0 && pendingRetries === 0) {
       await setCampaignStatus(campaign.id, "completed");
       return { ...base, reclaimed, note: "All contacts settled — campaign complete." };
     }
-    return { ...base, reclaimed, note: "Nothing due yet." };
+    return {
+      ...base,
+      reclaimed,
+      note: pendingRetries ? `Nothing due yet — ${pendingRetries} awaiting retry.` : "Nothing due yet.",
+    };
   }
 
   let placed = 0;

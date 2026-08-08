@@ -100,6 +100,18 @@ describe("redactCall", () => {
     assert.ok(!json.includes("9810012345"), "a number leaked through the transcript or tool args");
   });
 
+  it("leaves identifiers alone", () => {
+    // A tool call id is a long digit run that is not a phone number; mangling
+    // it would break correlation between the transcript and the tool log.
+    const withIds = {
+      ...call,
+      toolCalls: [{ id: "fc_5859909964309661584", name: "search_projects", args: { projectId: "skyline-greens" }, at: 1 }],
+    } as unknown as CallRecord;
+    const out = redactCall(withIds) as unknown as { toolCalls: { id: string; args: { projectId: string } }[] };
+    assert.equal(out.toolCalls[0].id, "fc_5859909964309661584");
+    assert.equal(out.toolCalls[0].args.projectId, "skyline-greens");
+  });
+
   it("drops the conversation entirely when asked", () => {
     const r = redactCall(call, false);
     assert.deepEqual(r.transcript, []);

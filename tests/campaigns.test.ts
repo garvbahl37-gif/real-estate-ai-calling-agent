@@ -359,6 +359,31 @@ describe("dispatcher", () => {
     assert.equal((await getCampaign(c.id))!.status, "completed");
   });
 
+  it("does not declare victory while retries are still pending", async () => {
+    // A contact awaiting a retry is neither `queued` nor `calling`, so a
+    // completion check that only looks at those two marks the campaign done
+    // while work remains — and a completed campaign is dropped by
+    // runningCampaigns(), so the retry never happens. Silent lead loss.
+    const c = await seed(1, { maxConcurrent: 1, maxAttempts: 3 });
+    const p = placer({ kind: "no_answer" });
+
+    await tickCampaign(c, p.fn, OPEN);
+    const contact = (await listContacts(c.id))[0];
+    assert.equal(contact.status, "no_answer");
+    assert.ok(contact.nextAttemptAt, "no retry scheduled");
+
+    // Tick again before the retry is due: nothing to claim, but not finished.
+    const r = await tickCampaign(c, p.fn, OPEN);
+    assert.doesNotMatch(r.note ?? "", /complete/i, "declared complete with a retry pending");
+
+    const { getCampaign } = await import("../src/lib/campaigns/store");
+    assert.equal((await getCampaign(c.id))!.status, "running", "campaign was closed with work outstanding");
+
+    // And once the retry comes due it is actually dialled.
+    const live = placer((n) => ({ kind: "placed", callId: `CA${n}` }));
+    assert.equal((await tickCampaign(c, live.fn, new Date(contact.nextAttemptAt!))).placed, 1);
+  });
+
   it("reclaims leaked contacts before counting the concurrency ceiling", async () => {
     // Otherwise a single leaked row permanently throttles the campaign.
     const c = await seed(3, { maxConcurrent: 1 });

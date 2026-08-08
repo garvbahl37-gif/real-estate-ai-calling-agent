@@ -54,10 +54,14 @@ function redactDeep(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redactDeep);
   if (value && typeof value === "object") {
     return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([k, v]) => [
-        k,
-        /phone|mobile|number/i.test(k) && typeof v === "string" ? maskPhone(v) : redactDeep(v),
-      ]),
+      Object.entries(value as Record<string, unknown>).map(([k, v]) => {
+        // Identifiers are long digit runs that are not phone numbers — a tool
+        // call id like `fc_5859909964309661584` would otherwise be mangled into
+        // something that no longer correlates with anything.
+        if (/^(id|callId|projectId|reraId|sid)$/i.test(k)) return [k, v];
+        if (/phone|mobile|number/i.test(k) && typeof v === "string") return [k, maskPhone(v)];
+        return [k, redactDeep(v)];
+      }),
     );
   }
   return value;
