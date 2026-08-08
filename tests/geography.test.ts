@@ -10,6 +10,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { claimsPersonalVerification } from "../src/lib/groundedness";
 import { operatingMarkets, unservedPlaceIn } from "../src/lib/projects";
 
 describe("unservedPlaceIn", () => {
@@ -64,6 +65,48 @@ describe("unservedPlaceIn", () => {
   it("never lists a served market as unserved", () => {
     for (const city of operatingMarkets()) {
       assert.equal(unservedPlaceIn(`property in ${city}`), null, `${city} is a served market`);
+    }
+  });
+});
+
+/**
+ * The RERA over-claim check.
+ *
+ * Split out of the groundedness verifier so it can be tested without a model
+ * call. The audit found it passing a Hinglish over-claim — "Maine RERA
+ * registration khud verify kiya hai" — because the pattern only knew English
+ * past tense, and in this demo the registration numbers are placeholders, so
+ * claiming to have checked one is a claim about diligence nobody did.
+ */
+describe("claimsPersonalVerification", () => {
+  it("catches the claim in English", () => {
+    for (const q of [
+      "I have verified the RERA registration myself",
+      "we checked the RERA number on the portal",
+      "I confirmed it with the authority",
+    ]) {
+      assert.ok(claimsPersonalVerification(q), `missed: ${q}`);
+    }
+  });
+
+  it("catches it in Hinglish, where the verb carries a Hindi auxiliary", () => {
+    for (const q of [
+      "Maine RERA registration khud verify kiya hai",
+      "humne portal pe check kar liya hai",
+      "maine khud dekha hai sir",
+    ]) {
+      assert.ok(claimsPersonalVerification(q), `missed: ${q}`);
+    }
+  });
+
+  it("does not fire on simply stating the project is registered", () => {
+    for (const q of [
+      "Ye project RERA registered hai, number brochure pe hai",
+      "RERA number UPRERAPRJ-DEMO-150001 hai",
+      "Aap UP-RERA portal pe check kar sakte hain",
+      "The project is RERA registered",
+    ]) {
+      assert.ok(!claimsPersonalVerification(q), `false positive: ${q}`);
     }
   });
 });

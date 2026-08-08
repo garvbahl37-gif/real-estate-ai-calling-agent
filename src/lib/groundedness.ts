@@ -70,6 +70,27 @@ interface ExtractedClaim {
 /* Deterministic verification                                          */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Whether the agent claimed to have personally verified something.
+ *
+ * Saying a project is RERA registered is fine — the catalogue says so. Saying
+ * *she checked the registration herself* is not: the numbers in this demo are
+ * placeholders, and in production it would be a claim about diligence nobody
+ * performed.
+ *
+ * Matching English past tense alone is not enough, and this is the failure the
+ * audit found: she says it in Hinglish — "Maine RERA registration khud verify
+ * kiya hai" — where the verb is the bare English stem carrying a Hindi
+ * auxiliary. A pattern looking for "verified" sails straight past it. So the
+ * test is a first-person marker plus a verification verb in either language,
+ * which is what the claim actually consists of.
+ */
+export function claimsPersonalVerification(quote: string): boolean {
+  const firstPerson = /\b(maine|humne|hum|i|we|khud)\b/i;
+  const verificationVerb = /\b(verif\w*|confirm\w*|check\w*|dekh\w*|cross[\s-]?check\w*)\b/i;
+  return firstPerson.test(quote) && verificationVerb.test(quote);
+}
+
 /** Prices are quoted approximately on a call; this is the tolerance. */
 const PRICE_TOLERANCE = 0.06;
 
@@ -134,9 +155,7 @@ function verify(c: ExtractedClaim): { verdict: ClaimVerdict; evidence?: string; 
 
     case "rera": {
       if (!project) return { verdict: "unverifiable" };
-      // The agent may say a project is registered — true in the catalogue — but
-      // must never claim to have verified the number itself.
-      const overclaims = /verified|confirm(ed)? (the )?rera|checked (the )?rera/i.test(c.quote);
+      const overclaims = claimsPersonalVerification(c.quote);
       return overclaims
         ? {
             verdict: "unsupported",
@@ -193,20 +212,43 @@ function verify(c: ExtractedClaim): { verdict: ClaimVerdict; evidence?: string; 
 
 /* ------------------------------------------------------------------ */
 
-function agentSpeech(call: CallRecord): string {
+/**
+ * The whole conversation, roles marked.
+ *
+ * It is tempting to send only her turns — they are the only ones being checked
+ * — and that is what this did originally. It leaks. Real answers are elliptical:
+ * the caller asks "Skyline Greens ka 3BHK kitne ka hai?" and two turns later
+ * she says "possession March 2026 mein ho jayega" without naming the project
+ * again. Stripped of the question, the extractor cannot attribute that claim,
+ * returns it with no projectId, and `verify` can only call it unverifiable —
+ * which is *excluded* from the score rather than counted against it.
+ *
+ * The net effect was an agent who could fabricate freely so long as she never
+ * repeated the project name. An audit caught exactly that: a fabricated
+ * possession date, an invented helipad and a false RERA verification all scored
+ * as unverifiable in the same call where a misquoted price was correctly
+ * caught.
+ */
+function conversation(call: CallRecord): string {
   return call.transcript
-    .filter((t) => t.role === "agent" && t.text.trim())
-    .map((t, i) => `${i + 1}. ${t.text.trim()}`)
+    .filter((t) => t.text.trim() && (t.role === "agent" || t.role === "customer"))
+    .map((t) => `${t.role === "agent" ? "AGENT" : "CALLER"}: ${t.text.trim()}`)
     .join("\n");
 }
 
 export async function checkGroundedness(call: CallRecord): Promise<GroundednessReport | undefined> {
-  const speech = agentSpeech(call);
+  const speech = conversation(call);
   if (!speech || !GEMINI_API_KEYS.length) return undefined;
 
-  const prompt = `Below is everything an AI real-estate agent said on a call. Extract every
-**checkable factual assertion she made** — a price, a possession date, a distance, an amenity, a
-RERA status, or whether something is available.
+  const prompt = `Below is a call between an AI real-estate agent and a caller. Extract every
+**checkable factual assertion the AGENT made** — a price, a possession date, a distance, an
+amenity, a RERA status, or whether something is available.
+
+The caller's turns are included ONLY so you can tell what each of her answers is about. Use them
+to attribute claims: if the caller asked about a project and she answers two turns later without
+naming it again, the claim is still about that project. Carry the subject forward through the
+conversation and set \`projectId\` whenever context makes it clear, not only when she says the name.
+An unattributed claim cannot be checked, so failing to attribute one hides an error.
 
 Do NOT extract:
 - anything the caller said
@@ -220,7 +262,7 @@ English. For prices, convert to rupees: 1.5 crore = 15000000, 95 lakh = 9500000.
 Catalogue ids you may attribute claims to:
 ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality}`).join("\n")}
 
-## What she said
+## The call
 ${speech}`;
 
   let extracted: ExtractedClaim[] | undefined;
