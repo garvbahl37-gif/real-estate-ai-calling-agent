@@ -2,7 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
-      "_comment": "04:00 UTC = 09:30 IST, just inside the TRAI window. Vercel's Hobby plan allows only one cron run per day, so this is a once-daily kick rather than the 5-minute cadence a campaign actually wants — see the README. The dispatcher is idempotent, so any external scheduler can call the same route as often as needed.",
       "path": "/api/campaigns/tick",
       "schedule": "0 4 * * *"
     }
