@@ -1,3 +1,4 @@
+import type { ActionResult } from "./actions/types";
 /**
  * Shared domain types for the real-estate voice agent.
  *
@@ -116,6 +117,8 @@ export interface CallRecord {
   sentiment?: SentimentTrajectory;
   /** Set when the caller asked for a human. */
   handoff?: HandoffRequest;
+  /** What was delivered downstream after the call ended. */
+  actions?: ActionResult[];
   /** Which agent profile handled the call. */
   profileId?: string;
   /** Set when the call came from a campaign. */

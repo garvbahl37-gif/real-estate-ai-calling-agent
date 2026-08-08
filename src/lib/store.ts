@@ -1,5 +1,6 @@
 import "server-only";
 import { neon } from "@neondatabase/serverless";
+import type { ActionResult } from "./actions/types";
 import type {
   CallRecord,
   CallSummary,
@@ -74,6 +75,7 @@ export function ensureSchema(): Promise<void> {
           groundedness   JSONB,
           sentiment      JSONB,
           handoff        JSONB,
+          actions        JSONB,
           profile_id     TEXT,
           campaign_id    TEXT
         )
@@ -87,6 +89,7 @@ export function ensureSchema(): Promise<void> {
         "groundedness JSONB",
         "sentiment JSONB",
         "handoff JSONB",
+        "actions JSONB",
         "profile_id TEXT",
         "campaign_id TEXT",
       ]) {
@@ -122,6 +125,7 @@ type Row = {
   groundedness: GroundednessReport | null;
   sentiment: SentimentTrajectory | null;
   handoff: HandoffRequest | null;
+  actions: ActionResult[] | null;
   profile_id: string | null;
   campaign_id: string | null;
 };
@@ -143,6 +147,7 @@ function rowToRecord(r: Row): CallRecord {
     groundedness: r.groundedness ?? undefined,
     sentiment: r.sentiment ?? undefined,
     handoff: r.handoff ?? undefined,
+    actions: r.actions ?? undefined,
     profileId: r.profile_id ?? undefined,
     campaignId: r.campaign_id ?? undefined,
   };
@@ -192,6 +197,7 @@ export interface UpdateCallInput {
   groundedness?: GroundednessReport;
   sentiment?: SentimentTrajectory;
   handoff?: HandoffRequest;
+  actions?: ActionResult[];
   profileId?: string;
   campaignId?: string;
   status?: CallRecord["status"];
@@ -214,6 +220,7 @@ export async function updateCall(id: string, patch: UpdateCallInput): Promise<Ca
         groundedness = COALESCE(${patch.groundedness ? JSON.stringify(patch.groundedness) : null}::jsonb, groundedness),
         sentiment    = COALESCE(${patch.sentiment ? JSON.stringify(patch.sentiment) : null}::jsonb, sentiment),
         handoff      = COALESCE(${patch.handoff ? JSON.stringify(patch.handoff) : null}::jsonb, handoff),
+        actions      = COALESCE(${patch.actions ? JSON.stringify(patch.actions) : null}::jsonb, actions),
         profile_id   = COALESCE(${patch.profileId ?? null}, profile_id),
         campaign_id  = COALESCE(${patch.campaignId ?? null}, campaign_id),
         status       = COALESCE(${patch.status ?? null}, status),
@@ -237,6 +244,7 @@ export async function updateCall(id: string, patch: UpdateCallInput): Promise<Ca
     groundedness: patch.groundedness ?? existing.groundedness,
     sentiment: patch.sentiment ?? existing.sentiment,
     handoff: patch.handoff ?? existing.handoff,
+    actions: patch.actions ?? existing.actions,
     profileId: patch.profileId ?? existing.profileId,
     campaignId: patch.campaignId ?? existing.campaignId,
     status: patch.status ?? existing.status,

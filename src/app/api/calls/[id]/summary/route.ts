@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { RULES, checkRateLimit, rateLimitHeaders } from "@/lib/rate-limit";
 import { getCall, updateCall } from "@/lib/store";
+import { runPostCallActions } from "@/lib/actions/runner";
 import { checkGroundedness } from "@/lib/groundedness";
 import { analyseSentiment } from "@/lib/sentiment";
 import { summarizeCall } from "@/lib/summarize";
@@ -64,10 +65,17 @@ export async function POST(req: Request, ctx: Ctx) {
     call.durationSec ??
     Math.max(0, Math.round((new Date(endedAt).getTime() - new Date(call.startedAt).getTime()) / 1000));
 
+  // Actions run after the analysis, not alongside it: the CRM payload carries
+  // the qualification score and the groundedness result, so it has to be built
+  // from a call record that already has them.
+  const enriched = { ...call, summary, groundedness, sentiment, endedAt, durationSec };
+  const actions = await runPostCallActions(enriched);
+
   await updateCall(id.data, {
     summary,
     groundedness,
     sentiment,
+    actions,
     status: "completed",
     endedAt,
     durationSec,
