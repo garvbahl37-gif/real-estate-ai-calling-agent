@@ -113,7 +113,7 @@ async function runConversation(persona: Persona): Promise<ConversationOutcome> {
   try {
     session = await ai.live.connect({
       model: LIVE_MODEL,
-      config: buildLiveConfig({ openingLanguage: "hinglish" }),
+      config: buildLiveConfig({ openingLanguage: persona.openingLanguage ?? "hinglish" }),
       callbacks: {
         onopen: () => {},
         onmessage: (m: LiveServerMessage) => {
@@ -346,11 +346,28 @@ export async function evaluatePersona(persona: Persona): Promise<EvalCallResult>
   const [verdict, groundedness] = await Promise.all([judge(persona, outcome), checkGroundedness(asCall)]);
 
   const scores = verdict?.scores ?? [];
+
+  // A judge that could not be reached is NOT a score of zero. Left unmarked it
+  // reads as the agent having failed catastrophically, drags the run mean down,
+  // and is indistinguishable from a real failure — the metric lies, and in the
+  // direction that would send you debugging an agent that is fine. Record it as
+  // an error so the aggregate can exclude it.
+  if (!scores.length) {
+    return {
+      ...base,
+      groundedness,
+      error:
+        base.error ??
+        "The judge returned no verdict — every text model and API key was exhausted or rejected the request. " +
+          "This run is unscored, not a zero.",
+    };
+  }
+
   return {
     ...base,
     scores,
     expectations: verdict?.expectations ?? [],
-    overall: scores.length ? Number((scores.reduce((n, s) => n + s.score, 0) / scores.length).toFixed(2)) : 0,
+    overall: Number((scores.reduce((n, s) => n + s.score, 0) / scores.length).toFixed(2)),
     groundedness,
     judgeNotes: verdict?.notes ?? "",
   };

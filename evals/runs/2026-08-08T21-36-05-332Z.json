@@ -1,0 +1,176 @@
+{
+  "id": "2026-08-08T21-36-05-332Z",
+  "startedAt": "2026-08-08T21:36:05.332Z",
+  "finishedAt": "2026-08-08T21:36:50.557Z",
+  "model": "gemini-3.1-flash-live-preview",
+  "gitSha": "9977e74",
+  "results": [
+    {
+      "personaId": "commercial-buyer",
+      "personaLabel": "Commercial / industrial requirement",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Namaste! Main Priya bol rahi hoon Aarambh Realty se — do minute baat kar sakte hain?",
+          "at": 1460
+        }
+      ],
+      "toolCalls": [],
+      "requirements": {},
+      "turnCount": 0,
+      "endedByAgent": false,
+      "durationMs": 10884,
+      "scores": [
+        {
+          "key": "languageDiscipline",
+          "score": 1,
+          "reason": "The agent initiated the call in Hindi despite the persona being designed for a Hinglish/English context and failed to adapt."
+        },
+        {
+          "key": "naturalness",
+          "score": 2,
+          "reason": "The agent used a robotic, scripted opening that immediately alienated the caller."
+        },
+        {
+          "key": "qualification",
+          "score": 1,
+          "reason": "The agent failed to capture any requirements as the call ended prematurely due to the poor opening."
+        },
+        {
+          "key": "accuracy",
+          "score": 3,
+          "reason": "No factual inaccuracies were presented because the agent did not provide any information."
+        },
+        {
+          "key": "guardrails",
+          "score": 3,
+          "reason": "The agent did not violate any guardrails during the brief interaction."
+        },
+        {
+          "key": "handling",
+          "score": 1,
+          "reason": "The agent failed to engage the caller or address the specific logistics business persona."
+        },
+        {
+          "key": "closing",
+          "score": 1,
+          "reason": "The agent did not reach a next step or manage the call flow effectively."
+        }
+      ],
+      "expectations": [
+        {
+          "expectation": "Recommended a commercial or industrial project",
+          "met": false,
+          "evidence": "The agent provided no recommendations."
+        },
+        {
+          "expectation": "Quoted plot sizes or specifications from the catalogue",
+          "met": false,
+          "evidence": "The agent provided no specifications."
+        }
+      ],
+      "overall": 1.71,
+      "judgeNotes": "The biggest problem was the agent's failure to engage the caller in the appropriate language and tone, leading to an immediate disconnect. The agent should have started by acknowledging the caller's specific business interest in industrial land near the airport to build rapport.",
+      "groundedness": {
+        "claims": [],
+        "grounded": 0,
+        "unsupported": 0,
+        "contradicted": 0,
+        "score": 100,
+        "checkedAt": "2026-08-08T21:36:49.319Z"
+      }
+    },
+    {
+      "personaId": "language-switcher",
+      "personaLabel": "Switches language mid-call",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Hello! This is Priya from Aarambh Realty — do you have two minutes to talk?",
+          "at": 1533
+        }
+      ],
+      "toolCalls": [],
+      "requirements": {},
+      "turnCount": 0,
+      "endedByAgent": false,
+      "durationMs": 9544,
+      "scores": [],
+      "expectations": [],
+      "overall": 0,
+      "judgeNotes": "",
+      "error": "The judge returned no verdict — every text model and API key was exhausted or rejected the request. This run is unscored, not a zero."
+    },
+    {
+      "personaId": "pure-english",
+      "personaLabel": "English speaker, no Hindi",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Hello, I'm Priya from Aarambh Realty — do you have a minute to talk?",
+          "at": 1573
+        }
+      ],
+      "toolCalls": [],
+      "requirements": {},
+      "turnCount": 0,
+      "endedByAgent": false,
+      "durationMs": 10689,
+      "scores": [],
+      "expectations": [],
+      "overall": 0,
+      "judgeNotes": "",
+      "error": "The judge returned no verdict — every text model and API key was exhausted or rejected the request. This run is unscored, not a zero."
+    },
+    {
+      "personaId": "pure-hindi",
+      "personaLabel": "Hindi speaker, limited English",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Namaste! Main Priya bol rahi hoon Aarambh Realty se — do minute baat kar sakte hain?",
+          "at": 1543
+        }
+      ],
+      "toolCalls": [],
+      "requirements": {},
+      "turnCount": 0,
+      "endedByAgent": false,
+      "durationMs": 10474,
+      "scores": [],
+      "expectations": [],
+      "overall": 0,
+      "judgeNotes": "",
+      "error": "The judge returned no verdict — every text model and API key was exhausted or rejected the request. This run is unscored, not a zero."
+    },
+    {
+      "personaId": "vague-browser",
+      "personaLabel": "Vague, non-committal",
+      "transcript": [
+        {
+          "id": "a1",
+          "role": "agent",
+          "text": "Namaste! Main Priya bol rahi hoon Aarambh Realty se — do minute baat kar sakte hain?",
+          "at": 1578
+        }
+      ],
+      "toolCalls": [],
+      "requirements": {},
+      "turnCount": 0,
+      "endedByAgent": false,
+      "durationMs": 10931,
+      "scores": [],
+      "expectations": [],
+      "overall": 0,
+      "judgeNotes": "",
+      "error": "The judge returned no verdict — every text model and API key was exhausted or rejected the request. This run is unscored, not a zero."
+    }
+  ],
+  "meanScore": 1.71,
+  "expectationPassRate": 0,
+  "meanGroundedness": 100
+}

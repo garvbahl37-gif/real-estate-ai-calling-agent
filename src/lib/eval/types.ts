@@ -108,6 +108,11 @@ export interface EvalSummaryRow {
   worst: { personaId: string; score: number };
 }
 
+/** Runs the judge actually scored. Unscored runs are excluded, never counted as zero. */
+export function scoredResults(run: EvalRun): EvalCallResult[] {
+  return run.results.filter((r) => r.scores.length > 0);
+}
+
 /** Aggregates rubric scores across every persona in a run. */
 export function aggregate(run: EvalRun): EvalSummaryRow[] {
   return RUBRIC.map((dim) => {

@@ -10,10 +10,22 @@
  * variety. Language drift, hallucination under pressure, refusing to hang up,
  * and pitching over a "no" are all real regressions this project has had.
  */
+import type { OpeningLanguage } from "../types";
+
 
 export interface Persona {
   id: string;
   label: string;
+  /**
+   * The language the agent should open in for this persona.
+   *
+   * She speaks first, before the caller has said anything, so she cannot mirror
+   * a language she has not heard yet — in the product this comes from the
+   * caller's own selection. The harness hardcoded Hinglish, which meant the
+   * English-only and Hindi-only personas were marked down for a greeting the
+   * harness itself had forced.
+   */
+  openingLanguage?: OpeningLanguage;
   /** What this persona is designed to catch. */
   probes: string;
   /** Instructions for the model playing the caller. */
@@ -60,6 +72,7 @@ budget thoda badha sakte hain". Later, ask whether the new option is really wort
   {
     id: "pure-english",
     label: "English speaker, no Hindi",
+    openingLanguage: "english",
     probes: "Language drift — she has previously slipped Hindi fillers into English calls.",
     maxTurns: 8,
     brief: `You are an NRI based in Singapore, looking to invest in Indian real estate. You speak
@@ -75,6 +88,7 @@ Never use a Hindi word, not even "achha" or "haan".`,
   {
     id: "pure-hindi",
     label: "Hindi speaker, limited English",
+    openingLanguage: "hindi",
     probes: "Whether she stays in Hindi rather than reverting to Hinglish.",
     maxTurns: 8,
     brief: `आप एक 52 वर्षीय व्यापारी हैं जो नोएडा में निवेश के लिए प्लॉट देख रहे हैं। आप सिर्फ़ हिंदी में
@@ -159,6 +173,7 @@ Keep pushing after each refusal.`,
   {
     id: "language-switcher",
     label: "Switches language mid-call",
+    openingLanguage: "english",
     probes: "Whether she follows the caller across a switch, both directions.",
     maxTurns: 9,
     brief: `Start the call in English, professionally. After about three turns, switch entirely to

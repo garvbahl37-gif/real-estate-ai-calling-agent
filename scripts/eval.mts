@@ -44,7 +44,15 @@ async function worker() {
     try {
       const r = await evaluatePersona(persona);
       results.push(r);
-      const flag = r.error ? "ERROR" : r.overall >= 4 ? "  ok " : r.overall >= 3 ? " warn" : " FAIL";
+      const flag = !r.scores.length
+        ? "unjdg"
+        : r.error
+          ? "ERROR"
+          : r.overall >= 4
+            ? "  ok "
+            : r.overall >= 3
+              ? " warn"
+              : " FAIL";
       console.log(
         `[${flag}] ${persona.id.padEnd(26)} ${r.error ? r.error.slice(0, 40) : `${r.overall.toFixed(2)}/5`}` +
           `  ${r.turnCount} turns  ${((Date.now() - t0) / 1000).toFixed(0)}s`,
