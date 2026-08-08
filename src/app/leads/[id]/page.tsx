@@ -4,6 +4,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { Transcript } from "@/components/Transcript";
 import { cn } from "@/lib/cn";
 import { formatInr, getProject } from "@/lib/projects";
+import { redactCall } from "@/lib/redact";
 import { getCall } from "@/lib/store";
 import type { LeadRequirements } from "@/lib/types";
 
@@ -45,8 +46,14 @@ function rows(r: LeadRequirements) {
 
 export default async function LeadDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const call = await getCall(id);
-  if (!call) notFound();
+  const stored = await getCall(id);
+  if (!stored) notFound();
+
+  // This page is public, and the transcript is where a caller reads their own
+  // number out loud — masking the phone field alone leaves it sitting in the
+  // conversation two lines below. Redact once, here, so every section on the
+  // page renders from data that is already safe.
+  const call = redactCall(stored);
 
   const req = call.summary?.requirements ?? call.requirements;
   const s = call.summary;

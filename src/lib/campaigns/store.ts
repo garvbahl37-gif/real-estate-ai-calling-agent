@@ -294,6 +294,49 @@ export async function campaignProgress(campaignId: string): Promise<CampaignProg
 }
 
 /**
+ * Progress for every campaign in one query.
+ *
+ * The obvious shape — list campaigns, then ask each for its progress — is an
+ * N+1, and on a serverless Postgres each of those is a fresh HTTP round trip
+ * rather than a cheap local call. The dashboard renders every campaign, so it
+ * would pay that N times on every page view.
+ */
+export async function allCampaignProgress(): Promise<Map<string, CampaignProgress>> {
+  const counts = new Map<string, Record<string, number>>();
+  const bump = (id: string, status: string, n: number) => {
+    const row = counts.get(id) ?? {};
+    row[status] = (row[status] ?? 0) + n;
+    counts.set(id, row);
+  };
+
+  if (!usingPostgres) {
+    for (const c of memory.contacts.values()) bump(c.campaignId, c.status, 1);
+  } else {
+    await ensureCampaignSchema();
+    const rows = (await sql!`
+      SELECT campaign_id, status, COUNT(*)::int AS n FROM campaign_contacts
+      GROUP BY campaign_id, status
+    `) as { campaign_id: string; status: string; n: number }[];
+    for (const r of rows) bump(r.campaign_id, r.status, r.n);
+  }
+
+  const out = new Map<string, CampaignProgress>();
+  for (const [id, row] of counts) {
+    const get = (s: ContactStatus) => row[s] ?? 0;
+    out.set(id, {
+      total: Object.values(row).reduce((a, b) => a + b, 0),
+      queued: get("queued"),
+      calling: get("calling"),
+      completed: get("completed"),
+      failed: get("failed"),
+      noAnswer: get("no_answer"),
+      suppressed: get("suppressed"),
+    });
+  }
+  return out;
+}
+
+/**
  * Atomically claims up to `limit` contacts that are due, marking them `calling`
  * so no other worker can take them.
  *

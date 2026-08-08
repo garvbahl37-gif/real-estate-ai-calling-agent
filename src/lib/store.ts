@@ -275,6 +275,35 @@ export async function listCalls(limit = 100): Promise<CallRecord[]> {
     .slice(0, limit);
 }
 
+/**
+ * Just the columns the ops dashboard aggregates over.
+ *
+ * `listCalls` returns whole records — transcript, tool calls, summary, all
+ * jsonb. Computing a latency percentile from that means pulling every
+ * transcript in the table across the wire to read two numbers off each one,
+ * which on a serverless Postgres is the difference between a fast page and a
+ * page that visibly hangs.
+ */
+export interface CallAnalyticsRow {
+  telemetry?: CallTelemetry;
+  groundedness?: GroundednessReport;
+}
+
+export async function listCallAnalytics(limit = 500): Promise<CallAnalyticsRow[]> {
+  if (!usingPostgres) {
+    return [...memoryStore.values()]
+      .slice(0, limit)
+      .map((c) => ({ telemetry: c.telemetry, groundedness: c.groundedness }));
+  }
+  await ensureSchema();
+  const rows = (await sql!`
+    SELECT telemetry, groundedness FROM calls
+    WHERE telemetry IS NOT NULL OR groundedness IS NOT NULL
+    ORDER BY started_at DESC LIMIT ${limit}
+  `) as { telemetry: CallTelemetry | null; groundedness: GroundednessReport | null }[];
+  return rows.map((r) => ({ telemetry: r.telemetry ?? undefined, groundedness: r.groundedness ?? undefined }));
+}
+
 export async function deleteCall(id: string): Promise<boolean> {
   if (usingPostgres) {
     await ensureSchema();

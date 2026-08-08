@@ -40,8 +40,8 @@ export function requireOpsAuth(req: Request): OpsAuthResult {
       ok: false,
       status: 503,
       error:
-        "Campaign management is disabled: OPS_ADMIN_TOKEN is not set. This route can place real " +
-        "phone calls, so it stays closed until an operator token is configured.",
+        "This route is disabled: OPS_ADMIN_TOKEN is not set. It exposes personal data or can place " +
+        "real phone calls, so it stays closed until an operator token is configured.",
     };
   }
 
@@ -51,6 +51,18 @@ export function requireOpsAuth(req: Request): OpsAuthResult {
     return { ok: false, status: 401, error: "Not authorised." };
   }
   return { ok: true };
+}
+
+/**
+ * Whether this request may see unmasked personal data.
+ *
+ * Distinct from `requireOpsAuth` because these routes degrade rather than
+ * refuse: an anonymous caller still gets the lead, its requirements and its
+ * score, with the phone number masked. Refusing outright would take the demo
+ * offline to protect a single field.
+ */
+export function isOperator(req: Request): boolean {
+  return requireOpsAuth(req).ok;
 }
 
 /** Vercel cron sends `Authorization: Bearer $CRON_SECRET`. */

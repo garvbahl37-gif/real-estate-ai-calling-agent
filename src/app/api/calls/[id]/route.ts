@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { settleContactByCallId } from "@/lib/campaigns/store";
+import { isOperator, requireOpsAuth } from "@/lib/ops-auth";
 import { RULES, checkRateLimit } from "@/lib/rate-limit";
+import { redactCall } from "@/lib/redact";
 import { deleteCall, getCall, updateCall } from "@/lib/store";
 import { callIdSchema, formatZodError, updateCallSchema } from "@/lib/validation";
 
@@ -14,13 +16,13 @@ async function readId(ctx: Ctx) {
   return callIdSchema.safeParse(id);
 }
 
-export async function GET(_req: Request, ctx: Ctx) {
+export async function GET(req: Request, ctx: Ctx) {
   const id = await readId(ctx);
   if (!id.success) return NextResponse.json({ error: "Invalid call id" }, { status: 400 });
 
   const call = await getCall(id.data);
   if (!call) return NextResponse.json({ error: "Call not found" }, { status: 404 });
-  return NextResponse.json({ call });
+  return NextResponse.json({ call: isOperator(req) ? call : redactCall(call) });
 }
 
 export async function PATCH(req: Request, ctx: Ctx) {
@@ -53,7 +55,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
   }
 }
 
-export async function DELETE(_req: Request, ctx: Ctx) {
+export async function DELETE(req: Request, ctx: Ctx) {
+  // Destructive and used by nothing in the app. Closed by default rather than
+  // left open on the reasoning that no one will find it.
+  const limit = await checkRateLimit(req, RULES.opsPerIp);
+  if (!limit.ok) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+
+  const auth = requireOpsAuth(req);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
   const id = await readId(ctx);
   if (!id.success) return NextResponse.json({ error: "Invalid call id" }, { status: 400 });
   const ok = await deleteCall(id.data);

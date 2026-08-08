@@ -157,6 +157,10 @@ export const RULES = {
   summaryPerIp: { name: "summary", limit: 30, windowSec: 3600 } as RateLimitRule,
   summaryGlobal: { name: "summary", limit: 600, windowSec: 86_400 } as RateLimitRule,
   writePerIp: { name: "write", limit: 600, windowSec: 3600 } as RateLimitRule,
+  // Throttles guessing at OPS_ADMIN_TOKEN. The comparison is timing-safe, but
+  // that only stops one class of attack — nothing else caps how many guesses
+  // an attacker gets, and these routes can dial phones and read personal data.
+  opsPerIp: { name: "ops", limit: 60, windowSec: 600 } as RateLimitRule,
 } as const;
 
 export function rateLimitHeaders(r: RateLimitResult): Record<string, string> {

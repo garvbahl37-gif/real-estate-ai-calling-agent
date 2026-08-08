@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { tickAll } from "@/lib/campaigns/dispatcher";
 import { callingEnabled, requireCronAuth } from "@/lib/ops-auth";
+import { RULES, checkRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,6 +18,9 @@ export const maxDuration = 120;
  * GET because that is what Vercel cron sends.
  */
 export async function GET(req: Request) {
+  const limit = await checkRateLimit(req, RULES.opsPerIp);
+  if (!limit.ok) return NextResponse.json({ error: "Too many requests." }, { status: 429 });
+
   const auth = requireCronAuth(req);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 

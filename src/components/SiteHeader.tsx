@@ -5,6 +5,7 @@ const NAV = [
   { href: "/call", label: "Live call" },
   { href: "/leads", label: "Leads" },
   { href: "/projects", label: "Projects" },
+  { href: "/ops", label: "Operations" },
   { href: "/how-it-works", label: "How it works" },
 ];
 

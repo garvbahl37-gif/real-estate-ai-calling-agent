@@ -1,15 +1,25 @@
 import { NextResponse } from "next/server";
+import { isOperator } from "@/lib/ops-auth";
 import { RULES, checkRateLimit } from "@/lib/rate-limit";
+import { redactCall } from "@/lib/redact";
 import { createCall, listCalls, storageBackend } from "@/lib/store";
 import { createCallSchema, formatZodError } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const calls = await listCalls(200);
-    return NextResponse.json({ calls, backend: storageBackend() });
+    // Every number here belongs to someone who tried the demo, not to us.
+    const operator = isOperator(req);
+    return NextResponse.json({
+      // A list view has no use for transcripts, and not sending them is both
+      // safer and a far smaller response.
+      calls: operator ? calls : calls.map((c) => redactCall(c, false)),
+      backend: storageBackend(),
+      ...(operator ? {} : { redacted: "Phone numbers are masked. Send the operator token to see them." }),
+    });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : String(err), calls: [], backend: storageBackend() },

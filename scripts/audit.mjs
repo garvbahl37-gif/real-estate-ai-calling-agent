@@ -8,7 +8,7 @@
 import { chromium } from "playwright-core";
 
 const BASE = process.argv[2] || process.env.BASE_URL || "http://localhost:3000";
-const PAGES = ["/", "/call", "/projects", "/projects/skyline-greens", "/leads", "/how-it-works"];
+const PAGES = ["/", "/call", "/projects", "/projects/skyline-greens", "/leads", "/how-it-works", "/ops"];
 const VIEWPORTS = [
   { w: 390, h: 844, name: "mobile" },
   { w: 768, h: 1024, name: "tablet" },
@@ -18,13 +18,24 @@ const VIEWPORTS = [
 const b = await chromium.launch({ headless: true });
 let problems = 0;
 
+// Warm every page once before measuring. Pages that read Postgres pay a cold
+// connection on first hit, and a 4-second first paint is not a layout defect —
+// it would only show up here as a spurious timeout partway through the sweep.
+{
+  const warm = await b.newPage();
+  for (const path of PAGES) {
+    await warm.goto(BASE + path, { waitUntil: "domcontentloaded", timeout: 90_000 }).catch(() => {});
+  }
+  await warm.close();
+}
+
 for (const path of PAGES) {
   for (const v of VIEWPORTS) {
     const p = await b.newPage({ viewport: { width: v.w, height: v.h } });
     const errors = [];
     p.on("pageerror", (e) => errors.push(e.message));
     p.on("console", (m) => m.type() === "error" && errors.push(m.text()));
-    await p.goto(BASE + path, { waitUntil: "networkidle" });
+    await p.goto(BASE + path, { waitUntil: "networkidle", timeout: 90_000 });
     await p.waitForTimeout(500);
 
     const r = await p.evaluate(() => {

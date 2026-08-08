@@ -3,6 +3,7 @@ import Link from "next/link";
 import { SiteHeader } from "@/components/SiteHeader";
 import { cn } from "@/lib/cn";
 import { formatInr } from "@/lib/projects";
+import { redactCall } from "@/lib/redact";
 import { listCalls, storageBackend } from "@/lib/store";
 import type { CallRecord } from "@/lib/types";
 
@@ -39,7 +40,9 @@ export default async function LeadsPage() {
   let calls: CallRecord[] = [];
   let error: string | null = null;
   try {
-    calls = await listCalls(200);
+    // Public page: mask before anything renders. `false` also drops the
+    // transcripts, which a list view never needed.
+    calls = (await listCalls(200)).map((c) => redactCall(c, false));
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
