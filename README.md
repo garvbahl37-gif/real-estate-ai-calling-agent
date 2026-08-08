@@ -471,6 +471,15 @@ through the same function, so a contact that fails at 20:58 does not get its
 observed DST since 1945 — Vercel runs UTC, and the rule is about the person being
 called.
 
+The dispatcher is a `tick` — idempotent, bounded, safe to run concurrently with
+itself — rather than a loop, because Vercel has no long-lived worker process.
+Everything a worker would hold in memory lives in Postgres instead, which is
+also what lets a campaign survive a deploy. A real campaign wants a tick every
+few minutes; **Vercel's Hobby plan allows one cron run per day**, so the
+committed schedule is a single 09:30 IST kick. Any external scheduler, or a
+manual `GET /api/campaigns/tick` with the operator token, drives it at whatever
+cadence you want — the route is safe to call as often as you like.
+
 **Dialling is off by default**, and needs two switches: `OPS_ADMIN_TOKEN` for who
 may manage a campaign, `CAMPAIGNS_ENABLED` for whether a real call may be placed
 at all. With the second unset the queue still runs completely — claiming, backing
