@@ -1,7 +1,7 @@
 import { Type, type FunctionDeclaration } from "@google/genai";
 import { PROJECTS, formatInr, getProject, scopedProjects } from "./projects";
 import { findProjectsByDescription } from "./semantic-tool";
-import type { LeadRequirements, Project } from "./types";
+import type { HandoffRequest, LeadRequirements, Project } from "./types";
 
 /**
  * Function declarations handed to the Gemini Live session, plus a pure executor.
@@ -168,6 +168,12 @@ export const AGENT_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
           enum: ["now", "callback"],
           description: "'now' if they want to be put through immediately, 'callback' if a call back is fine.",
         },
+        callbackTime: {
+          type: Type.STRING,
+          description:
+            "When they asked to be called back, in their own words — e.g. \"Friday shaam\", \"kal 11 baje\", " +
+            "\"weekend pe\". Only for urgency 'callback'. Leave empty if they did not name a time; do not invent one.",
+        },
       },
       required: ["reason", "urgency"],
     },
@@ -192,6 +198,12 @@ export const AGENT_FUNCTION_DECLARATIONS: FunctionDeclaration[] = [
           ],
         },
         reason: { type: Type.STRING, description: "One line for the CRM." },
+        callbackTime: {
+          type: Type.STRING,
+          description:
+            "Only for outcome 'callback_requested' or 'call_back_later': when to ring them, in their own " +
+            'words — e.g. "Friday shaam", "kal subah". Leave empty if they did not name a time.',
+        },
       },
       required: ["outcome"],
     },
@@ -210,7 +222,7 @@ export interface ToolExecutionResult {
   /** Signals the transport layer to tear the call down. */
   endCall?: { outcome: string; reason?: string };
   /** Signals that a human should take over. */
-  handoff?: { reason: string; urgency: "now" | "callback" };
+  handoff?: Omit<HandoffRequest, "requestedAt" | "acceptedAt">;
 }
 
 /**
@@ -382,6 +394,23 @@ function scoreProject(
 const ASYNC_TOOLS = new Set(["find_projects_by_description"]);
 
 /**
+ * A spoken time preference, or nothing.
+ *
+ * Models under-fill optional string fields by filling them with a placeholder
+ * instead of omitting them, and "unknown" / "not specified" / "N/A" landing in
+ * the CRM as a callback window is worse than an empty column — a human reads it
+ * as a time they failed to parse rather than a time nobody gave.
+ */
+const NON_ANSWERS = new Set(["unknown", "none", "n/a", "na", "not specified", "not mentioned", "null", "-"]);
+
+function cleanTime(raw: unknown): string | undefined {
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  if (!trimmed || NON_ANSWERS.has(trimmed.toLowerCase())) return undefined;
+  return trimmed;
+}
+
+/**
  * The pure executor: synchronous, no network, no clock. Everything the agent
  * does on a call goes through here except semantic search, which has to embed
  * the caller's words and is dispatched by `runAgentTool` instead.
@@ -534,6 +563,9 @@ export function executeAgentTool(
     case "transfer_to_human": {
       const reason = String(args.reason ?? "Caller asked for a human");
       const urgency = args.urgency === "now" ? "now" : "callback";
+      // Only meaningful on a callback. A caller being put through right now has
+      // not been asked for a time, so anything the model puts here is invented.
+      const callbackTime = urgency === "callback" ? cleanTime(args.callbackTime) : undefined;
       return {
         response: {
           ok: true,
@@ -541,21 +573,34 @@ export function executeAgentTool(
             urgency === "now"
               ? "Tell the caller you are connecting them to a sales manager now, then stay on the line briefly. " +
                 "Do not pitch again."
-              : "Tell the caller a sales manager will call them back shortly, confirm the best time, then close.",
+              : callbackTime
+                ? `Confirm the callback back to them in one line — "${callbackTime}" — then close.`
+                : "Tell the caller a sales manager will call them back shortly, ask when suits them, then close. " +
+                  "Call this tool again with callbackTime once they name one.",
           // Flagged so nobody demoing this mistakes it for a live transfer.
           simulated: true,
         },
-        requirementsPatch: { notes: `Asked for a human: ${reason}` },
-        handoff: { reason, urgency },
+        requirementsPatch: {
+          notes: `Asked for a human: ${reason}`,
+          callbackPreference: callbackTime,
+        },
+        handoff: { reason, urgency, preferredTime: callbackTime },
       };
     }
 
     case "end_call": {
       const outcome = String(args.outcome ?? "qualified_lead");
       const reason = args.reason ? String(args.reason) : undefined;
+      // Two of the six outcomes are a promise to ring back. Taking the time
+      // here as well as on transfer_to_human is not redundant: most callbacks
+      // are agreed at the close of a perfectly normal call, where no human was
+      // ever asked for and transfer_to_human is never called.
+      const callbackTime =
+        outcome === "callback_requested" || outcome === "call_back_later" ? cleanTime(args.callbackTime) : undefined;
       return {
         response: { ok: true, note: "Call is ending." },
-        requirementsPatch: reason ? { notes: reason } : undefined,
+        requirementsPatch:
+          reason || callbackTime ? { notes: reason, callbackPreference: callbackTime } : undefined,
         endCall: { outcome, reason },
       };
     }

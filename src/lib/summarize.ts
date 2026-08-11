@@ -65,6 +65,14 @@ const SUMMARY_SCHEMA = {
         interestedProjectIds: { type: Type.ARRAY, items: { type: Type.STRING } },
         siteVisitRequested: { type: Type.BOOLEAN },
         siteVisitPreference: { type: Type.STRING },
+        // Recovered here as well as captured live, because the callback is
+        // usually agreed in the closing seconds — the part of the call most
+        // likely to be cut short before the tool round-trips.
+        callbackPreference: {
+          type: Type.STRING,
+          description:
+            "When the caller asked to be rung back, in their own words. Empty if they never named a time.",
+        },
         notes: { type: Type.STRING },
       },
     },

@@ -54,6 +54,17 @@ export interface LeadRequirements {
   interestedProjectIds?: string[];
   siteVisitRequested?: boolean;
   siteVisitPreference?: string;
+  /**
+   * When the caller asked to be rung back, in their own words — "Friday shaam",
+   * "kal 11 baje". Free text for the same reason `siteVisitPreference` is: the
+   * agent is told to take a day/time if one is offered, not to negotiate a
+   * timestamp on a first call.
+   *
+   * Separate from `siteVisitPreference` because they are different promises.
+   * A caller can book Saturday's visit and still want a confirmation call on
+   * Friday, which is exactly the case the README's own CRM record ends on.
+   */
+  callbackPreference?: string;
 }
 
 export type TranscriptRole = "agent" | "customer" | "system";
@@ -271,6 +282,13 @@ export interface HandoffRequest {
   requestedAt: number;
   reason: string;
   urgency: "now" | "callback";
+  /**
+   * The window the caller asked to be reached in, verbatim. Only meaningful
+   * when `urgency` is "callback" — and without it "callback" tells a human to
+   * ring back but not when, which is the half of the instruction that actually
+   * decides whether they pick up.
+   */
+  preferredTime?: string;
   /** Set once a human picks it up. */
   acceptedAt?: string;
 }

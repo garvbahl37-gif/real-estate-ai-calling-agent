@@ -41,6 +41,7 @@ function rows(r: LeadRequirements) {
     ["Financing", r.financing && r.financing !== "unknown" ? r.financing.replace(/_/g, " ") : undefined],
     ["Interested in", r.interestedProjectIds?.map((id) => getProject(id)?.name ?? id).join(", ")],
     ["Site visit", r.siteVisitRequested ? r.siteVisitPreference || "Requested" : undefined],
+    ["Call back", r.callbackPreference],
   ] as const;
 }
 

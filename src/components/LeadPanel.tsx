@@ -73,6 +73,11 @@ function toFields(req: LeadRequirements): Field[] {
       label: "Site visit",
       value: req.siteVisitRequested ? req.siteVisitPreference || "Requested" : undefined,
     },
+    {
+      key: "callback",
+      label: "Call back",
+      value: req.callbackPreference,
+    },
   ];
 }
 
