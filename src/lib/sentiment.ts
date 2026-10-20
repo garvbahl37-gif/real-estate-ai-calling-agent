@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isQuotaError } from "./config";
+import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
 import type { CallRecord, SentimentLabel, SentimentTrajectory } from "./types";
 
 /**
@@ -89,7 +89,10 @@ ${dialogue}`;
           note: parsed.note ?? "",
         };
       } catch (err) {
-        if (!isQuotaError(err instanceof Error ? err.message : String(err))) return undefined;
+        const message = err instanceof Error ? err.message : String(err);
+        // Overloaded fails the same way for every key — try the next model.
+        if (isOverloadError(message)) break;
+        if (!isQuotaError(message)) return undefined;
       }
     }
   }

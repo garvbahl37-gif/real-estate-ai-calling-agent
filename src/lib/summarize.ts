@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isQuotaError } from "./config";
+import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
 import { PROJECTS, formatInr } from "./projects";
 import type { CallRecord, CallSummary, LeadRequirements } from "./types";
 
@@ -183,8 +183,9 @@ ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality} ${p.city}, ${p.priceR
   // only drops to a weaker model once every key is spent on the preferred one.
   //
   // A 429 means quota, not a malformed request, so it is worth another attempt.
-  // Anything else will repeat identically, so stop immediately rather than
-  // burning the remaining keys on the same failure.
+  // A 503 means this model is overloaded, so the next model is. Anything else
+  // will repeat identically, so stop immediately rather than burning the
+  // remaining keys on the same failure.
   for (const model of TEXT_MODEL_FALLBACKS) {
     for (const apiKey of GEMINI_API_KEYS) {
       const ai = new GoogleGenAI({ apiKey });
@@ -217,6 +218,9 @@ ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality} ${p.city}, ${p.priceR
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         lastError = `${model}: ${message}`;
+        // Overloaded is per model: the other keys would get the same 503 from
+        // this one, so go straight to the next model.
+        if (isOverloadError(message)) break;
         if (!isQuotaError(message)) return {
           ...FALLBACK,
           summary: `Summarisation failed — ${lastError}. The transcript and captured requirements below are unaffected.`,

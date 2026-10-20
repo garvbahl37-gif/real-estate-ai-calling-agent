@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isQuotaError } from "./config";
+import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
 import { PROJECTS, formatInr, getProject } from "./projects";
 import type { CallRecord, ClaimVerdict, FactClaim, GroundednessReport } from "./types";
 
@@ -285,7 +285,10 @@ ${speech}`;
         extracted = (JSON.parse(res.text) as { claims: ExtractedClaim[] }).claims ?? [];
         break outer;
       } catch (err) {
-        if (!isQuotaError(err instanceof Error ? err.message : String(err))) break outer;
+        const message = err instanceof Error ? err.message : String(err);
+        // Overloaded fails the same way for every key — try the next model.
+        if (isOverloadError(message)) continue outer;
+        if (!isQuotaError(message)) break outer;
       }
     }
   }

@@ -72,6 +72,18 @@ export function isQuotaError(message: string): boolean {
 }
 
 /**
+ * True when the model itself is overloaded — 503 UNAVAILABLE, "currently
+ * experiencing high demand". Unlike quota this is per model, not per key: every
+ * key gets the same answer from that model, but the next model in
+ * TEXT_MODEL_FALLBACKS usually answers. Treating it as a hard failure left every
+ * call unscored for as long as gemini-3.5-flash was busy, with a working
+ * fallback one line further down the list.
+ */
+export function isOverloadError(message: string): boolean {
+  return /\b503\b|UNAVAILABLE|overloaded|high demand/i.test(message);
+}
+
+/**
  * Dev escape hatch. Ephemeral tokens are the correct way to drive the Live API
  * from a browser — the raw key never leaves the server. If token minting is
  * ever unavailable on an account, setting this to "true" hands the browser the
