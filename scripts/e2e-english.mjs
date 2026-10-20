@@ -33,7 +33,7 @@ for (const line of SCRIPT) {
   await p.getByRole("button",{name:"Send",exact:true}).click();
   await p.waitForTimeout(13000);
 }
-const turns = await p.evaluate(()=>[...document.querySelectorAll("p.border-l-2")].map(e=>({
+const turns = await p.evaluate(()=>[...document.querySelectorAll("p[data-turn]")].map(e=>({
   who: e.parentElement?.querySelector("span")?.textContent?.trim(),
   lang: [...(e.parentElement?.querySelectorAll("span")||[])].map(s=>s.textContent.trim()).find(t=>/Hindi|Hinglish/.test(t)) || "",
   text: e.textContent.trim(),

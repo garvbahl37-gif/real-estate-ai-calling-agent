@@ -24,18 +24,16 @@ function Node({
   return (
     <div
       className={cn(
-        "rounded-sm border px-3 py-2.5",
-        tone === "solid" && "border-ink bg-ink text-paper",
-        tone === "aqua" && "border-aqua/40 bg-aqua-wash",
-        tone === "magenta" && "border-magenta/40 bg-magenta-wash",
-        tone === "plain" && "border-rule bg-paper",
+        "rounded-[16px] px-4 py-3",
+        tone === "solid" && "bg-cobalt text-white shadow-cta",
+        tone === "aqua" && "bg-pale",
+        tone === "magenta" && "bg-mid/60",
+        tone === "plain" && "border-line border bg-white",
       )}
     >
-      <p className={cn("text-[12.5px] leading-snug font-semibold", tone === "solid" ? "text-paper" : "text-ink")}>
-        {title}
-      </p>
+      <p className={cn("text-[13px] leading-snug font-semibold", tone === "solid" ? "text-white" : "text-ink")}>{title}</p>
       {detail ? (
-        <p className={cn("mt-0.5 font-mono text-[10.5px] leading-snug", tone === "solid" ? "text-paper/70" : "text-ink-3")}>
+        <p className={cn("mt-0.5 font-mono text-[10.5px] leading-snug", tone === "solid" ? "text-white/75" : "text-navy/70")}>
           {detail}
         </p>
       ) : null}
@@ -43,33 +41,39 @@ function Node({
   );
 }
 
+function StageLabel({ n, children }: { n: number; children: React.ReactNode }) {
+  return (
+    <p className="text-ink flex items-center gap-2.5 text-[15px] font-semibold">
+      <span className="bg-cobalt tnum flex h-6 w-6 items-center justify-center rounded-full text-[11px] text-white">{n}</span>
+      {children}
+    </p>
+  );
+}
+
 function Arrow({ label }: { label?: string }) {
   return (
-    <div className="flex items-center gap-2 py-1.5 pl-1">
-      <span className="bg-rule h-px flex-1" />
-      {label ? <span className="text-ink-3 font-mono text-[9.5px] tracking-wide">{label}</span> : null}
-      <span className="text-ink-3 text-[10px]">▼</span>
+    <div className="flex items-center gap-2 py-2 pl-4">
+      <span className="border-cobalt/40 h-5 border-l-2 border-dashed" />
+      {label ? <span className="text-ink-3 font-mono text-[10px]">{label}</span> : null}
     </div>
   );
 }
 
 export function SignalPath() {
   return (
-    <div className="grid gap-x-8 gap-y-10 lg:grid-cols-3">
+    <div className="grid gap-3 lg:grid-cols-3">
       {/* --- Stage 1: the two transports --- */}
-      <div>
-        <div className="shiro shiro-soft">
-          <span className="eyebrow">1 · Capture</span>
-        </div>
+      <div className="bg-frost rounded-panel p-5">
+        <StageLabel n={1}>Capture</StageLabel>
         <div className="mt-4 grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
           <div>
-            <p className="text-ink-3 mb-2 font-mono text-[10px] tracking-[0.1em] uppercase">Browser</p>
+            <p className="text-ink-3 mb-2 text-[11.5px] font-semibold">Browser</p>
             <Node title="Microphone" detail="getUserMedia · echo cancellation" />
             <Arrow />
             <Node title="AudioWorklet · pcm-recorder" detail="Float32 → Int16 · 16 kHz · 128 ms" tone="aqua" />
           </div>
           <div>
-            <p className="text-ink-3 mb-2 font-mono text-[10px] tracking-[0.1em] uppercase">Phone</p>
+            <p className="text-ink-3 mb-2 text-[11.5px] font-semibold">Phone</p>
             <Node title="Caller dials Twilio number" detail="TwiML <Connect><Stream>" />
             <Arrow />
             <Node title="Node WebSocket bridge" detail="8 kHz μ-law → PCM 16 kHz" tone="aqua" />
@@ -78,10 +82,8 @@ export function SignalPath() {
       </div>
 
       {/* --- Stage 2: the model --- */}
-      <div>
-        <div className="shiro shiro-soft">
-          <span className="eyebrow">2 · Converse</span>
-        </div>
+      <div className="bg-frost rounded-panel p-5">
+        <StageLabel n={2}>Converse</StageLabel>
         <div className="mt-4">
           <Node title="Gemini Live API" detail="native audio · speech-to-speech · WebSocket" tone="solid" />
           <p className="text-ink-2 mt-3 text-[12.5px] leading-relaxed">
@@ -107,10 +109,8 @@ export function SignalPath() {
       </div>
 
       {/* --- Stage 3: outputs --- */}
-      <div>
-        <div className="shiro shiro-soft">
-          <span className="eyebrow">3 · Capture the lead</span>
-        </div>
+      <div className="bg-frost rounded-panel p-5">
+        <StageLabel n={3}>Capture the lead</StageLabel>
         <div className="mt-4">
           <Node title="AudioWorklet · pcm-player" detail="24 kHz queue · instant flush on barge-in" tone="aqua" />
           <Arrow label="requirements patch" />

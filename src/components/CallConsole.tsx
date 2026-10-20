@@ -2,9 +2,26 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  AlertCircle,
+  ArrowRight,
+  AudioLines,
+  ChevronDown,
+  Download,
+  Headphones,
+  Keyboard,
+  Mic,
+  MicOff,
+  PhoneCall,
+  PhoneOff,
+  SendHorizontal,
+  SlidersHorizontal,
+  Sparkles,
+} from "lucide-react";
 import { LeadPanel } from "@/components/LeadPanel";
 import { Shirorekha } from "@/components/Shirorekha";
 import { Transcript } from "@/components/Transcript";
+import { BandPill, Card, Chip, Panel, PriyaAvatar, Ring, btn } from "@/components/ui";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
 import { DEFAULT_LIVE_MODEL } from "@/lib/models";
 import { LiveCall, type CallState } from "@/lib/live-session";
@@ -20,15 +37,22 @@ const LANGUAGES: { id: OpeningLanguage; label: string; sample: string }[] = [
 ];
 
 const STATE_COPY: Record<CallState, { label: string; tone: string }> = {
-  idle: { label: "Ready", tone: "text-ink-3" },
-  connecting: { label: "Connecting", tone: "text-amber" },
-  listening: { label: "Listening", tone: "text-magenta" },
-  thinking: { label: "Thinking", tone: "text-amber" },
-  speaking: { label: "Priya is speaking", tone: "text-aqua" },
-  reconnecting: { label: "Reconnecting", tone: "text-amber" },
-  ended: { label: "Call ended", tone: "text-ink-3" },
-  error: { label: "Error", tone: "text-magenta" },
+  idle: { label: "Ready", tone: "bg-line-2 text-ink-3" },
+  connecting: { label: "Connecting", tone: "bg-cream text-amber" },
+  listening: { label: "Listening", tone: "bg-ice text-navy" },
+  thinking: { label: "Thinking", tone: "bg-cream text-amber" },
+  speaking: { label: "Priya is speaking", tone: "bg-cobalt text-white" },
+  reconnecting: { label: "Reconnecting", tone: "bg-cream text-amber" },
+  ended: { label: "Call ended", tone: "bg-line-2 text-ink-2" },
+  error: { label: "Error", tone: "bg-rose-wash text-rose" },
 };
+
+const TRY_SAYING = [
+  { t: "मुझे नोएडा में 3BHK चाहिए, budget डेढ़ करोड़ तक", s: "Hindi" },
+  { t: "Investment ke liye dekh raha hoon, Sector 150 mein kya options hain?", s: "Hinglish" },
+  { t: "What's the possession timeline and is it RERA registered?", s: "English" },
+  { t: "Actually budget badha ke 2 crore kar dete hain", s: "Change mid-call" },
+];
 
 function clock(ms: number) {
   const t = Math.floor(ms / 1000);
@@ -138,68 +162,87 @@ export function CallConsole() {
 
   /* ---------------- start / stop ---------------- */
 
+  // A second click while the first is still connecting would build a second
+  // LiveCall before the first exists to be torn down — two agents at once.
+  const startingRef = useRef(false);
+
   const start = useCallback(async () => {
-    // Tear the previous call down first. Each click builds a new LiveCall, and
-    // without this an older instance can still hold a socket and a player open,
-    // so two agents talk at once.
-    await callRef.current?.stop("restarted");
-    callRef.current = null;
-
-    setError(null);
-    setSummary(null);
-    setTurns([]);
-    setRequirements({});
-    setToolCalls([]);
-    setLog([]);
-    setElapsed(0);
-    setRecordingUrl((prev) => {
-      if (prev) URL.revokeObjectURL(prev);
-      return null;
-    });
-    startedAtRef.current = Date.now();
-
-    // Register the call before connecting so a crash mid-call still leaves a
-    // row. The id is captured in a local as well as state because the LiveCall
-    // callbacks below close over this render's scope.
-    let newCallId: string | null = null;
+    if (startingRef.current) return;
+    startingRef.current = true;
     try {
-      const res = await fetch("/api/calls", {
+      // Tear the previous call down first. Each click builds a new LiveCall, and
+      // without this an older instance can still hold a socket and a player open,
+      // so two agents talk at once.
+      await callRef.current?.stop("restarted");
+      callRef.current = null;
+
+      setError(null);
+      setSummary(null);
+      setTurns([]);
+      setRequirements({});
+      setToolCalls([]);
+      setLog([]);
+      setElapsed(0);
+      setRecordingUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      // The previous call's id must not linger: the 4 s snapshot timer would
+      // write this call's transcript onto it until the new id arrives.
+      setCallId(null);
+      // Leave the setup screen on the click, not when the network answers.
+      setState("connecting");
+      startedAtRef.current = Date.now();
+
+      // Register the call alongside connecting rather than before it: the row
+      // still exists almost at once, so a crash mid-call still leaves one, but a
+      // slow database (a cold Neon branch takes several seconds) no longer holds
+      // the caller on the setup screen. The callbacks below wait on this promise
+      // for the id instead of closing over a value that is not there yet.
+      const registration: Promise<string | null> = fetch("/api/calls", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ channel: "browser" }),
-      });
-      const data = await res.json();
-      newCallId = data.call?.id ?? null;
-      setCallId(newCallId);
-    } catch {
-      setCallId(null);
-    }
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const id: string | null = data.call?.id ?? null;
+          setCallId(id);
+          return id;
+        })
+        .catch(() => {
+          setCallId(null);
+          return null;
+        });
 
-    const call = new LiveCall({
-      onState: setState,
-      onTranscript: setTurns,
-      onRequirements: setRequirements,
-      onToolCall: (t) => setToolCalls((prev) => [...prev, t]),
-      onLevel: (mic, agent) => {
-        levelsRef.current.mic = mic;
-        levelsRef.current.agent = agent;
-      },
-      onError: setError,
-      onLog: (line) => setLog((prev) => [...prev.slice(-40), line]),
-      onEnded: () => {
-        const wav = call.getRecording();
-        if (wav) setRecordingUrl(URL.createObjectURL(wav));
-        void finaliseCall(newCallId, call);
-      },
-    });
-    callRef.current = call;
-    await call.start({
-      voice,
-      model: DEFAULT_LIVE_MODEL,
-      openingLanguage: language,
-      customerName: customerName.trim() || undefined,
-      scenarioOverride: scenario.trim() || undefined,
-    });
+      const call = new LiveCall({
+        onState: setState,
+        onTranscript: setTurns,
+        onRequirements: setRequirements,
+        onToolCall: (t) => setToolCalls((prev) => [...prev, t]),
+        onLevel: (mic, agent) => {
+          levelsRef.current.mic = mic;
+          levelsRef.current.agent = agent;
+        },
+        onError: setError,
+        onLog: (line) => setLog((prev) => [...prev.slice(-40), line]),
+        onEnded: () => {
+          const wav = call.getRecording();
+          if (wav) setRecordingUrl(URL.createObjectURL(wav));
+          void registration.then((id) => finaliseCall(id, call));
+        },
+      });
+      callRef.current = call;
+      await call.start({
+        voice,
+        model: DEFAULT_LIVE_MODEL,
+        openingLanguage: language,
+        customerName: customerName.trim() || undefined,
+        scenarioOverride: scenario.trim() || undefined,
+      });
+    } finally {
+      startingRef.current = false;
+    }
   }, [voice, language, customerName, scenario, finaliseCall]);
 
   const stop = useCallback(() => {
@@ -231,144 +274,87 @@ export function CallConsole() {
   const showResult = (state === "ended" || state === "error") && turns.length > 0;
 
   return (
-    <div className="mx-auto w-full max-w-[1400px] px-5 sm:px-8">
-      {/* --- Live rule: the signature element -------------------------
-          Only rendered once a call exists. Idle it was a bare rule with empty
-          space above and below, which reads as a stray line rather than as the
-          instrument it becomes. */}
-      {state !== "idle" ? (
-        <div className="pt-6">
-          <Shirorekha levelsRef={levelsRef} active={active} height={64} />
-        </div>
-      ) : (
-        <div className="pt-10" />
-      )}
-
-      {/* --- Status bar ---------------------------------------------- */}
-      <div className="border-rule flex flex-wrap items-center gap-x-5 gap-y-2 border-b pt-1 pb-3">
-        <div className="flex items-center gap-2">
-          {active ? <span className="bg-magenta live-dot h-2 w-2 rounded-full" aria-hidden /> : null}
-          {/* Screen readers get call-state changes announced without the
-              transcript itself firing on every streamed token. */}
-          <span
-            role="status"
-            aria-live="polite"
-            className={cn("font-mono text-[11px] font-semibold tracking-[0.1em] uppercase", stateCopy.tone)}
-          >
-            {stateCopy.label}
-          </span>
-        </div>
-
-        {(active || elapsed > 0) && (
-          <span className="text-ink tnum font-mono text-[13px] font-semibold">{clock(elapsed)}</span>
-        )}
-
-        <div className="ml-auto flex items-center gap-2">
-          {active ? (
-            <>
-              <button
-                onClick={toggleMute}
-                aria-pressed={muted}
-                aria-label={muted ? "Unmute your microphone" : "Mute your microphone"}
-                className={cn(
-                  "border-rule hover:border-ink min-h-11 rounded-sm border px-4 font-mono text-[11px] font-semibold tracking-wide uppercase transition-colors",
-                  muted ? "bg-magenta-wash text-magenta border-magenta/40" : "text-ink-2",
-                )}
-              >
-                {muted ? "Unmute" : "Mute"}
-              </button>
-              <button
-                onClick={stop}
-                aria-label="End the call"
-                className="bg-magenta text-paper min-h-11 rounded-sm px-5 font-mono text-[11px] font-semibold tracking-wide uppercase transition-opacity hover:opacity-85"
-              >
-                End call
-              </button>
-            </>
-          ) : null}
-        </div>
-      </div>
-
+    <div className="flex flex-col gap-3">
       {error ? (
-        <div className="border-magenta/30 bg-magenta-wash mt-4 rounded-sm border px-4 py-3">
-          <p className="text-magenta text-[13px] font-semibold">{error}</p>
-          <p className="text-ink-2 mt-1 text-[12.5px] leading-relaxed">
-            If this mentions a missing key, add <code className="font-mono">GEMINI_API_KEY</code> to{" "}
-            <code className="font-mono">.env.local</code> and restart. Microphone errors usually mean the browser
-            blocked mic access — check the padlock icon in the address bar.
-          </p>
+        <div className="bg-rose-wash rounded-card flex gap-3 px-5 py-4 sm:px-8">
+          <AlertCircle className="text-rose mt-0.5 h-5 w-5 shrink-0" aria-hidden />
+          <div>
+            <p className="text-rose text-[13.5px] font-semibold">{error}</p>
+            <p className="text-ink-2 mt-1 text-[12.5px] leading-relaxed">
+              If this mentions a missing key, add <code className="font-mono">GEMINI_API_KEY</code> to{" "}
+              <code className="font-mono">.env.local</code> and restart. Microphone errors usually mean the browser
+              blocked mic access — check the padlock icon in the address bar.
+            </p>
+          </div>
         </div>
       ) : null}
 
       {/* --- Pre-call setup ------------------------------------------ */}
       {showSetup ? (
-        <div className="grid gap-10 py-12 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-16">
-          <div>
-            <p className="eyebrow">Browser voice demo</p>
-            <h1 className="font-display text-ink mt-3 text-[38px] leading-[1.12] sm:text-[46px]">
-              Press call. Speak Hindi.
-              <br />
-              Watch the lead fill itself in.
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_400px]">
+          <Card className="flex flex-col px-5 py-10 sm:px-10 sm:py-14">
+            <div>
+              <Chip icon={<Mic className="h-3.5 w-3.5" />}>Browser voice demo</Chip>
+            </div>
+            <h1 className="text-ink mt-6 max-w-[17ch] text-[38px] leading-[1.06] font-medium tracking-[-0.035em] sm:text-[52px]">
+              Press call. Speak <span className="highlight">Hindi</span>. Watch the lead fill itself in.
             </h1>
-            <p className="text-ink-2 mt-5 max-w-[54ch] text-[15px] leading-[1.7]">
+            <p className="text-ink-2 mt-5 max-w-[54ch] text-[15.5px] leading-[1.65]">
               Priya is a sales executive for a fictional Delhi-NCR developer. She opens the call, works out what you
               want, pitches the project that actually fits, and writes the qualified lead into the CRM while you talk.
               Interrupt her whenever you like — she stops mid-word.
             </p>
 
-            <button
-              onClick={start}
-              className="group bg-ink text-paper hover:bg-aqua mt-8 inline-flex items-center gap-3 rounded-sm px-6 py-3.5 text-[15px] font-semibold transition-colors"
-            >
-              <span className="bg-paper/25 flex h-6 w-6 items-center justify-center rounded-full">
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                  <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.4.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.4 0 .7-.2 1l-2.3 2.2z" />
-                </svg>
+            <div className="mt-8 flex flex-wrap items-center gap-4">
+              <button onClick={start} className={btn("primary", "lg")}>
+                <PhoneCall className="h-4 w-4" aria-hidden />
+                Start the call
+              </button>
+              <span className="text-ink-3 flex items-center gap-1.5 text-[12px]">
+                <Headphones className="h-3.5 w-3.5" aria-hidden />
+                Mic required · headphones help
               </span>
-              Start the call
-              <span className="text-paper/50 font-mono text-[11px] tracking-wide">MIC REQUIRED</span>
-            </button>
-
+            </div>
             <p className="text-ink-3 mt-3 text-[12px]">
-              Works in Chrome, Edge and Safari. Use headphones if you can — it keeps Priya from hearing herself.
+              Works in Chrome, Edge and Safari. Headphones keep Priya from hearing herself.
             </p>
 
-            <div className="shiro shiro-soft mt-12">
-              <p className="eyebrow">Try saying</p>
-              <ul className="mt-3 space-y-2.5">
-                {[
-                  { t: "मुझे नोएडा में 3BHK चाहिए, budget डेढ़ करोड़ तक", s: "Hindi" },
-                  { t: "Investment ke liye dekh raha hoon, Sector 150 mein kya options hain?", s: "Hinglish" },
-                  { t: "What's the possession timeline and is it RERA registered?", s: "English" },
-                  { t: "Actually budget badha ke 2 crore kar dete hain", s: "Change mid-call" },
-                ].map((x) => (
-                  <li key={x.t} className="flex items-baseline gap-3">
-                    <span className="border-rule text-ink-3 shrink-0 rounded-full border px-1.5 py-px font-mono text-[9px] tracking-wide">
-                      {x.s}
+            <div className="wash mt-10 rounded-[22px] p-5 sm:p-6">
+              <p className="text-ink text-[14px] font-semibold">Try saying</p>
+              <ul className="mt-4 space-y-2.5">
+                {TRY_SAYING.map((x, i) => (
+                  <li key={x.t} className={cn("flex items-center gap-2", i % 2 && "flex-row-reverse")}>
+                    <span
+                      className={cn(
+                        "max-w-[80%] rounded-[16px] px-3.5 py-2 text-[14px] leading-snug",
+                        i % 2 ? "text-ink rounded-br-[6px] bg-white" : "bg-cobalt rounded-bl-[6px] text-white",
+                      )}
+                    >
+                      {x.t}
                     </span>
-                    <span className="font-display text-ink-2 text-[15px] leading-relaxed">{x.t}</span>
+                    <span className="text-ink-3 shrink-0 text-[11px] font-medium">{x.s}</span>
                   </li>
                 ))}
               </ul>
             </div>
-          </div>
+          </Card>
 
           {/* Call setup */}
-          <div className="lg:border-rule lg:border-l lg:pl-10">
-            <div className="shiro">
-              <p className="eyebrow">Call setup</p>
-            </div>
+          <Card as="aside" className="flex flex-col p-5 sm:p-7">
+            <p className="text-ink text-[18px] font-semibold tracking-[-0.015em]">Call setup</p>
+            <p className="text-ink-3 mt-1 text-[12.5px]">Applies to this call only.</p>
 
-            <label className="mt-5 block">
-              <span className="text-ink-2 mb-1.5 block text-[12px] font-semibold">Opening language</span>
-              <div className="border-rule grid grid-cols-3 overflow-hidden rounded-sm border">
+            <div className="mt-6">
+              <span className="text-ink-2 mb-2 block text-[12.5px] font-semibold">Opening language</span>
+              <div className="bg-frost grid grid-cols-3 gap-1 rounded-full p-1" role="group" aria-label="Opening language">
                 {LANGUAGES.map((l) => (
                   <button
                     key={l.id}
                     onClick={() => setLanguage(l.id)}
+                    aria-pressed={language === l.id}
                     className={cn(
-                      "border-rule min-h-11 text-[12px] font-semibold transition-colors not-last:border-r",
-                      language === l.id ? "bg-ink text-paper" : "text-ink-2 hover:bg-paper-2",
+                      "min-h-10 rounded-full text-[13px] font-semibold transition-colors",
+                      language === l.id ? "text-cobalt bg-white shadow-[0_4px_12px_-6px_rgb(19_40_110/0.35)]" : "text-ink-2 hover:text-ink",
                     )}
                   >
                     {l.label}
@@ -378,20 +364,21 @@ export function CallConsole() {
               <p className="text-ink-3 mt-2 text-[11.5px] leading-relaxed">
                 Only sets the greeting. She switches to whatever you speak.
               </p>
-            </label>
+            </div>
 
-            <div className="bg-paper-2 mt-3 rounded-sm px-3 py-2.5">
-              <p className="font-display text-ink-2 text-[14px] leading-relaxed">
+            <div className="bg-frost mt-3 flex items-start gap-2.5 rounded-[18px] p-3">
+              <PriyaAvatar size={28} />
+              <p className="text-ink rounded-[14px] rounded-tl-[5px] bg-white px-3 py-2 text-[13.5px] leading-relaxed">
                 {LANGUAGES.find((l) => l.id === language)?.sample}
               </p>
             </div>
 
-            <label className="mt-5 block">
-              <span className="text-ink-2 mb-1.5 block text-[12px] font-semibold">Voice</span>
+            <label className="mt-6 block">
+              <span className="text-ink-2 mb-2 block text-[12.5px] font-semibold">Voice</span>
               <select
                 value={voice}
                 onChange={(e) => setVoice(e.target.value)}
-                className="border-rule bg-paper text-ink focus:border-ink min-h-11 w-full rounded-sm border px-3 text-[13px] outline-none"
+                className="border-line bg-frost text-ink focus:border-cobalt min-h-11 w-full rounded-[14px] border px-3 text-[13px] outline-none"
               >
                 {VOICES.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -401,33 +388,34 @@ export function CallConsole() {
               </select>
             </label>
 
-
             <button
               onClick={() => setShowAdvanced((s) => !s)}
-              className="text-ink-3 hover:text-ink mt-5 inline-flex min-h-9 items-center font-mono text-[11px] tracking-[0.08em] uppercase transition-colors"
+              aria-expanded={showAdvanced}
+              className="text-cobalt hover:text-cobalt-deep mt-5 inline-flex min-h-9 items-center gap-1.5 text-[13px] font-semibold transition-colors"
             >
-              {showAdvanced ? "− " : "+ "}Change the flow
+              <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden />
+              {showAdvanced ? "Hide flow changes" : "Change the flow"}
             </button>
 
             {showAdvanced ? (
               <div className="rise-in mt-3 space-y-4">
                 <label className="block">
-                  <span className="text-ink-2 mb-1.5 block text-[12px] font-semibold">Caller&rsquo;s name</span>
+                  <span className="text-ink-2 mb-2 block text-[12.5px] font-semibold">Caller&rsquo;s name</span>
                   <input
                     value={customerName}
                     onChange={(e) => setCustomerName(e.target.value)}
                     placeholder="Leave blank and she'll ask for it"
-                    className="border-rule bg-paper text-ink placeholder:text-ink-3/60 focus:border-ink w-full rounded-sm border px-3 py-2 text-[13px] outline-none"
+                    className="border-line bg-frost text-ink placeholder:text-ink-3/70 focus:border-cobalt w-full rounded-[14px] border px-3 py-2.5 text-[13px] outline-none"
                   />
                 </label>
                 <label className="block">
-                  <span className="text-ink-2 mb-1.5 block text-[12px] font-semibold">Extra instructions</span>
+                  <span className="text-ink-2 mb-2 block text-[12.5px] font-semibold">Extra instructions</span>
                   <textarea
                     value={scenario}
                     onChange={(e) => setScenario(e.target.value)}
                     rows={4}
                     placeholder={'e.g. "Ask about parking before budget." or "The caller is an NRI in Dubai."'}
-                    className="border-rule bg-paper text-ink placeholder:text-ink-3/60 focus:border-ink w-full resize-y rounded-sm border px-3 py-2 text-[13px] leading-relaxed outline-none"
+                    className="border-line bg-frost text-ink placeholder:text-ink-3/70 focus:border-cobalt w-full resize-y rounded-[14px] border px-3 py-2.5 text-[13px] leading-relaxed outline-none"
                   />
                   <span className="text-ink-3 mt-1.5 block text-[11.5px] leading-relaxed">
                     Appended to her system prompt for this call only. Useful for changing the conversation flow live.
@@ -435,109 +423,174 @@ export function CallConsole() {
                 </label>
               </div>
             ) : null}
-          </div>
+
+            <div className="mt-auto pt-6">
+            <ol className="wash space-y-3 rounded-[18px] p-4 text-[12.5px]">
+              {[
+                "Allow the microphone when the browser asks",
+                "Priya opens the call — answer her like a buyer",
+                "Interrupt, change your budget, switch language",
+                "The lead record fills in on the right as you talk",
+              ].map((s, i) => (
+                <li key={s} className="text-ink-2 flex items-start gap-2.5 leading-snug">
+                  <span className="bg-cobalt tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-semibold text-white">
+                    {i + 1}
+                  </span>
+                  {s}
+                </li>
+              ))}
+            </ol>
+            </div>
+          </Card>
         </div>
       ) : null}
 
       {/* --- Live call ------------------------------------------------ */}
       {!showSetup ? (
-        <div className="grid gap-8 py-8 lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-12">
-          <div className="flex min-h-[420px] flex-col">
-            <div className="shiro shrink-0">
-              <span className="eyebrow">Transcript</span>
-            </div>
-            <Transcript
-              turns={turns}
-              thinking={state === "connecting"}
-              emptyHint="Priya will open the call in a moment. Speak whenever you're ready — you can talk over her."
-              className="mt-3 max-h-[min(58vh,620px)] flex-1 pr-2"
-            />
-
-            {active ? (
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  const text = typed.trim();
-                  if (!text) return;
-                  callRef.current?.sendText(text);
-                  setTyped("");
-                }}
-                className="border-rule mt-4 flex shrink-0 items-center gap-2 border-t pt-4"
-              >
-                <input
-                  value={typed}
-                  onChange={(e) => setTyped(e.target.value)}
-                  placeholder="…or type instead of speaking"
-                  aria-label="Type a message to Priya instead of speaking"
-                  className="border-rule bg-paper text-ink placeholder:text-ink-3/60 focus:border-ink min-h-11 flex-1 rounded-sm border px-3 text-[13px] outline-none"
-                />
-                <button
-                  type="submit"
-                  disabled={!typed.trim()}
-                  className="bg-ink text-paper hover:bg-aqua min-h-11 rounded-sm px-4 text-[13px] font-semibold transition-colors disabled:opacity-35"
-                >
-                  Send
-                </button>
-              </form>
-            ) : null}
-
-            {state === "ended" || state === "error" ? (
-              <div className="mt-6 flex flex-wrap gap-3">
-                <button
-                  onClick={start}
-                  className="bg-ink text-paper hover:bg-aqua rounded-sm px-5 py-2.5 text-[13px] font-semibold transition-colors"
-                >
-                  Start a fresh call
-                </button>
-                {recordingUrl ? (
-                  <a
-                    href={recordingUrl}
-                    download={`priya-call-${callId ?? "recording"}.wav`}
-                    className="border-aqua text-aqua hover:bg-aqua hover:text-paper rounded-sm border px-5 py-2.5 text-[13px] font-semibold transition-colors"
+        <>
+          {/* Call bar: who, state, clock, the live waveform, and the controls. */}
+          <Card className="flex flex-wrap items-center gap-x-5 gap-y-3 px-4 py-3.5 sm:px-6">
+            <div className="flex items-center gap-3">
+              <PriyaAvatar size={44} className={cn(active && "live-ring")} />
+              <div>
+                <p className="text-ink text-[14.5px] font-semibold">Priya · Aarambh Realty</p>
+                <div className="mt-1 flex items-center gap-2">
+                  {/* Screen readers get call-state changes announced without the
+                      transcript itself firing on every streamed token. */}
+                  <span
+                    role="status"
+                    aria-live="polite"
+                    className={cn("inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11.5px] font-semibold", stateCopy.tone)}
                   >
-                    Download recording (.wav)
-                  </a>
-                ) : null}
-                {callId ? (
-                  <Link
-                    href={`/leads/${callId}`}
-                    className="border-rule text-ink hover:border-ink rounded-sm border px-5 py-2.5 text-[13px] font-semibold transition-colors"
-                  >
-                    Open the lead record
-                  </Link>
-                ) : null}
+                    {active ? <span className="live-dot h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> : null}
+                    {stateCopy.label}
+                  </span>
+                  {active || elapsed > 0 ? (
+                    <span className="text-ink tnum font-mono text-[13px] font-semibold">{clock(elapsed)}</span>
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-          </div>
+            </div>
 
-          <div className="lg:border-rule flex min-h-0 flex-col lg:border-l lg:pl-10">
-            <LeadPanel requirements={requirements} toolCalls={toolCalls} className="max-h-[min(70vh,760px)]" />
+            <div className="order-last min-w-[200px] flex-1 basis-full sm:order-none sm:basis-auto">
+              <Shirorekha levelsRef={levelsRef} active={active} height={44} />
+            </div>
+
+            <div className="ml-auto flex items-center gap-2">
+              {active ? (
+                <>
+                  <button
+                    onClick={toggleMute}
+                    aria-pressed={muted}
+                    aria-label={muted ? "Unmute your microphone" : "Mute your microphone"}
+                    className={cn(btn(muted ? "outline" : "soft", "md"), muted && "border-rose text-rose")}
+                  >
+                    {muted ? <MicOff className="h-4 w-4" aria-hidden /> : <Mic className="h-4 w-4" aria-hidden />}
+                    {muted ? "Unmute" : "Mute"}
+                  </button>
+                  <button onClick={stop} aria-label="End the call" className={btn("danger", "md")}>
+                    <PhoneOff className="h-4 w-4" aria-hidden />
+                    End call
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </Card>
+
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <Card className="flex min-h-[520px] flex-col p-3 sm:p-4">
+              <div className="flex items-center justify-between gap-3 px-2 pt-1 pb-3">
+                <Chip icon={<AudioLines className="h-3.5 w-3.5" />}>Live transcript</Chip>
+                <span className="text-ink-3 tnum text-[12px]">{turns.length} turns</span>
+              </div>
+              <Panel className="flex min-h-0 flex-1 flex-col p-3 sm:p-4">
+                <Transcript
+                  turns={turns}
+                  toolCalls={toolCalls}
+                  thinking={state === "connecting"}
+                  emptyHint="Priya will open the call in a moment. Speak whenever you're ready — you can talk over her."
+                  className="max-h-[min(58vh,620px)] flex-1 pr-1"
+                />
+
+                {active ? (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const text = typed.trim();
+                      if (!text) return;
+                      callRef.current?.sendText(text);
+                      setTyped("");
+                    }}
+                    className="mt-3 flex shrink-0 items-center gap-2 rounded-full bg-white p-1.5 pl-4 shadow-[0_6px_18px_-12px_rgb(19_40_110/0.4)]"
+                  >
+                    <Keyboard className="text-ink-3 h-4 w-4 shrink-0" aria-hidden />
+                    <input
+                      value={typed}
+                      onChange={(e) => setTyped(e.target.value)}
+                      placeholder="…or type instead of speaking"
+                      aria-label="Type a message to Priya instead of speaking"
+                      className="text-ink placeholder:text-ink-3/70 min-h-10 min-w-0 flex-1 bg-transparent text-[13.5px] outline-none"
+                    />
+                    <button type="submit" disabled={!typed.trim()} className={btn("primary", "sm")}>
+                      <SendHorizontal className="h-3.5 w-3.5" aria-hidden />
+                      Send
+                    </button>
+                  </form>
+                ) : null}
+              </Panel>
+
+              {state === "ended" || state === "error" ? (
+                <div className="flex flex-wrap gap-2.5 px-1 pt-4">
+                  <button onClick={start} className={btn("primary")}>
+                    <PhoneCall className="h-4 w-4" aria-hidden />
+                    Start a fresh call
+                  </button>
+                  {recordingUrl ? (
+                    <a href={recordingUrl} download={`priya-call-${callId ?? "recording"}.wav`} className={btn("soft")}>
+                      <Download className="h-4 w-4" aria-hidden />
+                      Download recording (.wav)
+                    </a>
+                  ) : null}
+                  {callId ? (
+                    <Link href={`/leads/${callId}`} className={btn("outline")}>
+                      Open the lead record <ArrowRight className="h-4 w-4" aria-hidden />
+                    </Link>
+                  ) : null}
+                </div>
+              ) : null}
+            </Card>
+
+            <Card as="aside" className="flex min-h-0 flex-col p-5 sm:p-6">
+              <LeadPanel requirements={requirements} toolCalls={toolCalls} className="max-h-[min(78vh,820px)]" />
+            </Card>
           </div>
-        </div>
+        </>
       ) : null}
 
       {/* --- Post-call summary --------------------------------------- */}
       {showResult ? (
-        <div className="border-rule border-t py-10">
-          <div className="shiro">
-            <div className="flex items-baseline justify-between">
-              <span className="eyebrow">Call summary</span>
-              {summarising ? <span className="text-amber font-mono text-[10px]">Generating…</span> : null}
-            </div>
+        <Card className="px-5 py-8 sm:px-8 sm:py-10">
+          <div className="flex items-center justify-between gap-3">
+            <Chip icon={<Sparkles className="h-3.5 w-3.5" />}>
+              <span className="tracking-[0.08em] uppercase">Call summary</span>
+            </Chip>
+            {summarising ? <span className="text-amber text-[12px] font-semibold">Generating…</span> : null}
           </div>
 
           {summary ? (
-            <div className="rise-in mt-5 grid gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="rise-in mt-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div>
-                <h2 className="font-display text-ink text-[26px] leading-snug">{summary.headline}</h2>
+                <h2 className="text-ink text-[26px] leading-snug font-medium tracking-[-0.025em] sm:text-[30px]">
+                  {summary.headline}
+                </h2>
                 <p className="text-ink-2 mt-4 max-w-[68ch] text-[14.5px] leading-[1.75]">{summary.summary}</p>
 
                 {summary.objections.length ? (
                   <div className="mt-6">
-                    <span className="eyebrow">Objections raised</span>
-                    <ul className="mt-2 space-y-1.5">
+                    <p className="text-ink text-[13.5px] font-semibold">Objections raised</p>
+                    <ul className="mt-2.5 flex flex-wrap gap-2">
                       {summary.objections.map((o, i) => (
-                        <li key={i} className="text-ink-2 border-magenta/30 border-l-2 pl-3 text-[13.5px] leading-relaxed">
+                        <li key={i} className="bg-frost text-ink-2 rounded-[14px] px-3.5 py-2 text-[13px] leading-snug">
                           {o}
                         </li>
                       ))}
@@ -545,9 +598,9 @@ export function CallConsole() {
                   </div>
                 ) : null}
 
-                <div className="bg-aqua-wash mt-6 rounded-sm px-4 py-3">
-                  <span className="eyebrow">Next action</span>
-                  <p className="text-ink mt-1 text-[14px] font-medium leading-relaxed">{summary.nextAction}</p>
+                <div className="bg-cobalt mt-6 rounded-[20px] px-5 py-4 text-white">
+                  <p className="text-[12px] font-semibold text-white/75">Next action</p>
+                  <p className="mt-1 text-[15px] leading-relaxed font-medium">{summary.nextAction}</p>
                 </div>
 
                 {summary.agentNotes ? (
@@ -555,59 +608,52 @@ export function CallConsole() {
                 ) : null}
               </div>
 
-              <div className="lg:border-rule lg:border-l lg:pl-8">
-                <div className="shiro shiro-soft">
-                  <span className="eyebrow">Qualification</span>
+              <Panel className="p-5">
+                <p className="text-ink text-[13.5px] font-semibold">Qualification</p>
+                <div className="mt-4 flex items-center gap-4">
+                  <Ring value={summary.qualification.score} size={92} stroke={10} track="var(--color-pale)">
+                    <span className="text-ink tnum text-[26px] leading-none font-semibold">{summary.qualification.score}</span>
+                    <span className="text-ink-3 text-[10px]">/ 100</span>
+                  </Ring>
+                  <BandPill band={summary.qualification.band} />
                 </div>
-                <div className="mt-3 flex items-baseline gap-3">
-                  <span className="font-display text-ink tnum text-[46px] leading-none">
-                    {summary.qualification.score}
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.1em] uppercase",
-                      summary.qualification.band === "hot"
-                        ? "bg-magenta text-paper"
-                        : summary.qualification.band === "warm"
-                          ? "bg-amber-wash text-amber"
-                          : "bg-paper-2 text-ink-3",
-                    )}
-                  >
-                    {summary.qualification.band}
-                  </span>
-                </div>
-                <p className="text-ink-2 mt-3 text-[13px] leading-relaxed">{summary.qualification.reasoning}</p>
+                <p className="text-ink-2 mt-4 text-[13px] leading-relaxed">{summary.qualification.reasoning}</p>
 
                 {summary.languagesUsed.length ? (
                   <div className="mt-5">
-                    <span className="eyebrow">Languages</span>
+                    <p className="label">Languages</p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {summary.languagesUsed.map((l) => (
-                        <span key={l} className="border-rule text-ink-2 rounded-full border px-2 py-0.5 text-[11px]">
+                        <span key={l} className="text-navy rounded-full bg-white px-2.5 py-1 text-[11.5px] font-medium">
                           {l}
                         </span>
                       ))}
                     </div>
                   </div>
                 ) : null}
-              </div>
+              </Panel>
             </div>
           ) : summarising ? (
-            <p className="text-ink-3 mt-4 text-[13px]">Reading the transcript and scoring the lead…</p>
+            <p className="text-ink-3 mt-5 text-[13.5px]">Reading the transcript and scoring the lead…</p>
           ) : (
-            <p className="text-ink-3 mt-4 text-[13px]">No summary was generated for this call.</p>
+            <p className="text-ink-3 mt-5 text-[13.5px]">No summary was generated for this call.</p>
           )}
-        </div>
+        </Card>
       ) : null}
 
       {/* --- Connection log ------------------------------------------ */}
       {log.length > 0 && !showSetup ? (
-        <details className="border-rule border-t py-4">
-          <summary className="eyebrow cursor-pointer select-none">Connection log ({log.length})</summary>
-          <pre className="text-ink-3 thin-scroll mt-3 max-h-52 overflow-auto font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
-            {log.join("\n")}
-          </pre>
-        </details>
+        <Card as="div" className="px-5 py-4 sm:px-8">
+          <details className="group">
+            <summary className="text-ink-2 flex min-h-9 cursor-pointer items-center gap-2 text-[13px] font-semibold select-none">
+              <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+              Connection log ({log.length})
+            </summary>
+            <pre className="text-ink-3 thin-scroll bg-frost mt-3 max-h-52 overflow-auto rounded-[14px] p-4 font-mono text-[11px] leading-relaxed whitespace-pre-wrap">
+              {log.join("\n")}
+            </pre>
+          </details>
+        </Card>
       ) : null}
     </div>
   );

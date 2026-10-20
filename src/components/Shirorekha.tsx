@@ -8,7 +8,7 @@ import { useEffect, useRef, type RefObject } from "react";
  * In Devanagari the शिरोरेखा is the horizontal stroke drawn across the top of a
  * word — it is what binds separate letters into a single unit. This component
  * is that stroke, and during a live call it becomes the waveform: dead flat
- * when nothing is happening, teal when the agent speaks, magenta when the
+ * when nothing is happening, cobalt when the agent speaks, mid blue when the
  * caller does. One line doing the work of a status light, a VU meter and a rule.
  *
  * Levels arrive from the audio worklets ~60 times a second. They are passed in
@@ -89,7 +89,7 @@ export function Shirorekha({ levelsRef, active, height = 56, className }: Shiror
 
       // The baseline is the rule itself, always drawn — an idle call still
       // reads as a piece of typography rather than an empty box.
-      ctx.strokeStyle = "#dcd8cf";
+      ctx.strokeStyle = "#cfe4ff";
       ctx.lineWidth = 1.5;
       ctx.beginPath();
       ctx.moveTo(0, mid);
@@ -108,7 +108,7 @@ export function Shirorekha({ levelsRef, active, height = 56, className }: Shiror
         const x = i * step;
         const amp = v * maxAmp;
         ctx.globalAlpha = 0.15 + (i / BUCKETS) * 0.85;
-        ctx.strokeStyle = w2 === 2 ? "#0b6e6e" : w2 === 1 ? "#c21e56" : "#dcd8cf";
+        ctx.strokeStyle = w2 === 2 ? "#325ced" : w2 === 1 ? "#8bb7f0" : "#cfe4ff";
         ctx.lineWidth = Math.max(1.25, step * 0.62);
         ctx.lineCap = "round";
         ctx.beginPath();

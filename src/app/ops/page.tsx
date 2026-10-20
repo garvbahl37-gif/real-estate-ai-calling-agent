@@ -7,7 +7,10 @@ import { aggregate, scoredResults, type EvalRun } from "@/lib/eval/types";
 import { callingEnabled } from "@/lib/ops-auth";
 import { listCallAnalytics, storageBackend, type CallAnalyticsRow } from "@/lib/store";
 import type { Campaign } from "@/lib/types";
+import { Activity, FlaskConical, PhoneOutgoing, Plug, Send, ShieldCheck, Timer } from "lucide-react";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { Chip, EmptyNote, Panel } from "@/components/ui";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
@@ -90,45 +93,54 @@ function accuracyStats(calls: CallAnalyticsRow[]) {
 /* ------------------------------------------------------------------ */
 
 function Section({
+  icon,
   eyebrow,
   title,
   note,
   children,
 }: {
+  icon: React.ReactNode;
   eyebrow: string;
   title: string;
   note?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="mt-14">
-      <div className="shiro">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="eyebrow">{eyebrow}</p>
-            <h2 className="font-display text-ink mt-2 text-[24px] leading-tight sm:text-[27px]">{title}</h2>
-          </div>
-          {note ? <p className="text-ink-3 max-w-[52ch] text-[12px] leading-relaxed">{note}</p> : null}
+    <section className="bg-canvas rounded-card px-5 py-8 sm:px-8 sm:py-10">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.95fr)] lg:items-end">
+        <div>
+          <Chip icon={icon}>{eyebrow}</Chip>
+          <h2 className="text-ink mt-4 text-[26px] leading-tight font-medium tracking-[-0.025em] sm:text-[32px]">{title}</h2>
         </div>
+        {note ? <p className="text-ink-3 max-w-[60ch] text-[12.5px] leading-relaxed lg:justify-self-end">{note}</p> : null}
       </div>
-      <div className="mt-6">{children}</div>
+      <div className="mt-8">{children}</div>
     </section>
   );
 }
 
 function Stat({ k, v, sub, tone }: { k: string; v: string; sub?: string; tone?: "good" | "bad" }) {
   return (
-    <div className="shiro shiro-soft">
-      <dt className="eyebrow">{k}</dt>
+    <div
+      className={cn(
+        "rounded-[20px] px-5 py-5",
+        tone === "good" ? "bg-cobalt text-white" : tone === "bad" ? "bg-rose-wash" : "wash-soft",
+      )}
+    >
+      <dt className={cn("text-[12px] font-medium", tone === "good" ? "text-white/75" : tone === "bad" ? "text-rose" : "text-ink-3")}>
+        {k}
+      </dt>
       <dd
         className={cn(
-          "font-display tnum mt-1.5 text-[28px] leading-none",
-          tone === "good" ? "text-aqua" : tone === "bad" ? "text-magenta" : "text-ink",
+          "tnum mt-2 text-[28px] leading-none font-medium tracking-[-0.03em]",
+          tone === "good" ? "text-white" : tone === "bad" ? "text-rose" : "text-ink",
         )}
       >
         {v}
       </dd>
-      {sub ? <p className="text-ink-3 mt-1.5 text-[11.5px] leading-snug">{sub}</p> : null}
+      {sub ? (
+        <p className={cn("mt-2 text-[11.5px] leading-snug", tone === "good" ? "text-white/70" : "text-ink-3")}>{sub}</p>
+      ) : null}
     </div>
   );
 }
@@ -140,22 +152,33 @@ function ScoreBar({ score }: { score: number }) {
       {[1, 2, 3, 4, 5].map((n) => (
         <span
           key={n}
-          className={cn(
-            "h-2.5 w-4 rounded-[1px] sm:w-5",
-            score >= n ? (score >= 4 ? "bg-aqua" : "bg-amber") : "bg-rule-2",
-          )}
+          className={cn("h-2.5 w-5 rounded-full sm:w-6", score >= n ? (score >= 4 ? "bg-cobalt" : "bg-mid") : "bg-pale/60")}
         />
       ))}
     </div>
   );
 }
 
-function EmptyNote({ children }: { children: React.ReactNode }) {
+function Pill({ tone, children }: { tone: "cobalt" | "pale" | "line" | "cream" | "rose"; children: React.ReactNode }) {
   return (
-    <p className="border-rule text-ink-3 rounded-sm border border-dashed px-5 py-8 text-center text-[13px] leading-relaxed">
+    <span
+      className={cn(
+        "inline-flex rounded-full px-2.5 py-1 text-[11px] leading-none font-semibold capitalize",
+        tone === "cobalt" && "bg-cobalt text-white",
+        tone === "pale" && "bg-pale text-navy",
+        tone === "line" && "bg-line-2 text-ink-3",
+        tone === "cream" && "bg-cream text-amber",
+        tone === "rose" && "bg-rose-wash text-rose",
+      )}
+    >
       {children}
-    </p>
+    </span>
   );
+}
+
+/** Header cell for the white-row tables on frost. */
+function Th({ children }: { children: React.ReactNode }) {
+  return <th className="text-ink-3 px-4 pb-1 text-[12px] font-medium">{children}</th>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -178,28 +201,32 @@ export default async function OpsPage() {
   const scored = run ? scoredResults(run) : [];
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="mx-auto flex min-h-dvh max-w-[1440px] flex-col gap-3 p-2 sm:p-3 lg:p-4">
       <SiteHeader current="/ops" />
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 sm:px-8">
-        <div className="shiro mt-10">
-          <div className="flex flex-wrap items-end justify-between gap-4">
+      <main className="flex flex-1 flex-col gap-3">
+        <section className="bg-canvas rounded-card overflow-hidden p-2.5 sm:p-4">
+          <div className="wash grid gap-6 rounded-[22px] px-5 py-10 sm:px-8 sm:py-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)] lg:items-end">
             <div>
-              <p className="eyebrow">Operations</p>
-              <h1 className="font-display text-ink mt-2 text-[34px] leading-tight sm:text-[40px]">
+              <Chip tone="white" icon={<Activity className="h-3.5 w-3.5" />}>
+                Operations
+              </Chip>
+              <h1 className="text-ink mt-5 text-[38px] leading-[1.04] font-medium tracking-[-0.035em] sm:text-[52px]">
                 Is she actually working?
               </h1>
             </div>
-            <p className="text-ink-3 max-w-[50ch] text-[12px] leading-relaxed">
+            <p className="text-ink-2 max-w-[56ch] text-[13.5px] leading-relaxed lg:justify-self-end">
               An agent that sounds convincing and is wrong 8% of the time is worse than one that sounds worse and is
               right — and nothing on the call page would tell you which one you have. Everything here is measured.
-              Storage: <span className="font-mono">{storageBackend()}</span>.
+              Storage:{" "}
+              <span className="text-navy rounded-md bg-white px-1.5 py-0.5 font-mono text-[12px]">{storageBackend()}</span>.
             </p>
           </div>
-        </div>
+        </section>
 
         {/* ---------------- Quality ---------------- */}
         <Section
+          icon={<FlaskConical className="h-3.5 w-3.5" />}
           eyebrow="Evaluation"
           title="Adversarial personas"
           note={
@@ -213,7 +240,7 @@ export default async function OpsPage() {
         >
           {run ? (
             <>
-              <dl className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+              <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
                 <Stat
                   k="Mean score"
                   v={`${run.meanScore.toFixed(2)} / 5`}
@@ -252,70 +279,64 @@ export default async function OpsPage() {
                   so the persona table's min-w-[420px] would otherwise widen the
                   whole track and push the dimension list off-screen with it —
                   the overflow-x-auto never gets the chance to scroll. */}
-              <div className="mt-8 grid gap-8 lg:grid-cols-2">
-                <div className="min-w-0">
-                  <p className="eyebrow">By dimension</p>
-                  <ul className="mt-3 space-y-2.5">
+              <div className="mt-6 grid gap-3 lg:grid-cols-2">
+                <Panel className="min-w-0 p-5">
+                  <p className="text-ink text-[14px] font-semibold">By dimension</p>
+                  <ul className="mt-4 space-y-2">
                     {rubric.map((d) => (
-                      <li key={d.key} className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                      <li key={d.key} className="flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-[14px] bg-white px-3.5 py-2.5">
                         {/* Full width on mobile: the label, five bars and a score do not
                             fit on one 375px line, and squeezing them makes all three
                             unreadable rather than one of them wrap. */}
-                        <span className="text-ink-2 w-full shrink-0 text-[12.5px] leading-tight sm:w-[18ch]">
-                          {d.label}
-                        </span>
+                        <span className="text-ink-2 w-full shrink-0 text-[12.5px] leading-tight sm:w-[18ch]">{d.label}</span>
                         <ScoreBar score={d.mean} />
-                        <span className="text-ink tnum font-mono text-[12px]">{d.mean.toFixed(2)}</span>
+                        <span className="text-ink tnum text-[12.5px] font-semibold">{d.mean.toFixed(2)}</span>
                         {d.worst.score < 4 ? (
                           // min-w-0 is what lets `truncate` actually shrink here — a flex
                           // item will not go below its content width without it.
-                          <span className="text-ink-3 min-w-0 flex-1 truncate text-[11px]">
-                            worst: {d.worst.personaId}
-                          </span>
+                          <span className="text-ink-3 min-w-0 flex-1 truncate text-[11px]">worst: {d.worst.personaId}</span>
                         ) : null}
                       </li>
                     ))}
                   </ul>
-                </div>
+                </Panel>
 
-                <div className="min-w-0">
-                  <p className="eyebrow">By persona</p>
+                <Panel className="min-w-0 p-5">
+                  <p className="text-ink text-[14px] font-semibold">By persona</p>
                   <div className="mt-3 overflow-x-auto">
-                    <table className="w-full min-w-[420px] border-collapse text-left">
+                    <table className="w-full min-w-[420px] border-separate border-spacing-y-1.5 text-left">
                       <thead>
-                        <tr className="border-ink border-b">
+                        <tr>
                           {["Persona", "Probes", "Score", "Turns"].map((h) => (
-                            <th key={h} className="eyebrow pb-2 font-normal">
-                              {h}
-                            </th>
+                            <Th key={h}>{h}</Th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
                         {run.results.map((r) => (
-                          <tr key={r.personaId} className="border-rule-2 border-b">
-                            <td className="text-ink py-2.5 pr-4 align-top text-[13px] font-medium">{r.personaLabel}</td>
-                            <td className="text-ink-3 py-2.5 pr-4 align-top text-[11.5px] leading-snug">
+                          <tr key={r.personaId} className="bg-white">
+                            <td className="text-ink rounded-l-[12px] px-4 py-2.5 align-top text-[13px] font-medium">{r.personaLabel}</td>
+                            <td className="text-ink-3 px-4 py-2.5 align-top text-[11.5px] leading-snug">
                               {r.scores.length ? `${r.expectations.filter((e) => e.met).length}/${r.expectations.length} checks` : "—"}
                             </td>
                             {/* An unreachable judge reads as a catastrophic failure if
                                 rendered as 0.00, which is the same mistake the CLI made. */}
                             <td
                               className={cn(
-                                "tnum py-2.5 pr-4 align-top font-mono text-[12.5px]",
-                                !r.scores.length ? "text-ink-3" : r.overall >= 4 ? "text-aqua" : "text-magenta",
+                                "tnum px-4 py-2.5 align-top text-[12.5px] font-semibold",
+                                !r.scores.length ? "text-ink-3" : r.overall >= 4 ? "text-cobalt" : "text-rose",
                               )}
                               title={!r.scores.length ? r.error : undefined}
                             >
                               {r.scores.length ? r.overall.toFixed(2) : "unjudged"}
                             </td>
-                            <td className="text-ink-3 tnum py-2.5 align-top font-mono text-[12px]">{r.turnCount}</td>
+                            <td className="text-ink-3 tnum rounded-r-[12px] px-4 py-2.5 align-top text-[12px]">{r.turnCount}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </div>
+                </Panel>
               </div>
             </>
           ) : (
@@ -328,12 +349,13 @@ export default async function OpsPage() {
 
         {/* ---------------- Latency ---------------- */}
         <Section
+          icon={<Timer className="h-3.5 w-3.5" />}
           eyebrow="Latency"
           title="What the caller experiences as slow"
           note="Time to first audio — from the caller finishing speaking to her voice starting. Averages hide the problem here; a p95 of three seconds is a call that felt broken twice even if the median was fine."
         >
           {latency.turns > 0 ? (
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4 lg:grid-cols-6">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               <Stat
                 k="TTFA p50"
                 v={latency.p50 != null ? `${latency.p50} ms` : "—"}
@@ -344,11 +366,7 @@ export default async function OpsPage() {
                 v={latency.p95 != null ? `${latency.p95} ms` : "—"}
                 tone={latency.p95 != null && latency.p95 > 2500 ? "bad" : undefined}
               />
-              <Stat
-                k="Tool p95"
-                v={latency.toolP95 != null ? `${latency.toolP95} ms` : "—"}
-                sub="Pure executor — no network"
-              />
+              <Stat k="Tool p95" v={latency.toolP95 != null ? `${latency.toolP95} ms` : "—"} sub="Pure executor — no network" />
               <Stat k="Barge-ins" v={String(latency.bargeIns)} sub="Caller interrupted her" />
               <Stat k="Reconnects" v={String(latency.reconnects)} tone={latency.reconnects > 0 ? "bad" : undefined} />
               <Stat k="Sampled" v={`${latency.turns}`} sub={`turns across ${latency.sampled} calls`} />
@@ -360,12 +378,13 @@ export default async function OpsPage() {
 
         {/* ---------------- Accuracy ---------------- */}
         <Section
+          icon={<ShieldCheck className="h-3.5 w-3.5" />}
           eyebrow="Factual accuracy"
           title="What she claimed, checked"
           note="A model finds assertions in a transcript well and adjudicates them badly, so extraction is the only part delegated: it returns quoted claims and the verdict is computed here against the catalogue. A misquoted possession date is a RERA problem, not a typo."
         >
           {accuracy.calls > 0 ? (
-            <dl className="grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
               <Stat
                 k="Score"
                 v={accuracy.score != null ? `${accuracy.score}/100` : "—"}
@@ -373,7 +392,7 @@ export default async function OpsPage() {
                 sub={`across ${accuracy.calls} calls`}
               />
               <Stat k="Claims checked" v={String(accuracy.checked)} />
-              <Stat k="Grounded" v={String(accuracy.grounded)} tone="good" />
+              <Stat k="Grounded" v={String(accuracy.grounded)} />
               <Stat k="Unsupported" v={String(accuracy.unsupported)} sub="Not in the sheet; costs half" />
               <Stat
                 k="Contradicted"
@@ -389,15 +408,16 @@ export default async function OpsPage() {
 
         {/* ---------------- Campaigns ---------------- */}
         <Section
+          icon={<PhoneOutgoing className="h-3.5 w-3.5" />}
           eyebrow="Outbound"
           title="Campaigns"
           note={
             <>
               Dialling is{" "}
               {callingEnabled() ? (
-                <span className="text-magenta font-semibold">enabled</span>
+                <span className="text-rose font-semibold">enabled</span>
               ) : (
-                <span className="text-aqua font-semibold">disabled</span>
+                <span className="text-cobalt font-semibold">disabled</span>
               )}
               . With it off the queue still claims, retries and respects the 09:00–21:00 TRAI window, but places no
               call — so the engine is observable without anyone&rsquo;s phone ringing.
@@ -405,45 +425,32 @@ export default async function OpsPage() {
           }
         >
           {progress.length ? (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] border-collapse text-left">
+            <Panel className="overflow-x-auto p-2">
+              <table className="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-left">
                 <thead>
-                  <tr className="border-ink border-b">
+                  <tr>
                     {["Campaign", "Status", "Window", "Contacts", "Queued", "Done", "Failed"].map((h) => (
-                      <th key={h} className="eyebrow pb-2 font-normal">
-                        {h}
-                      </th>
+                      <Th key={h}>{h}</Th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {progress.map(({ campaign: c, progress: p }) => (
-                    <tr key={c.id} className="border-rule-2 border-b">
-                      <td className="text-ink py-3 pr-4 align-top text-[13.5px] font-semibold">{c.name}</td>
-                      <td className="py-3 pr-4 align-top">
-                        <span
-                          className={cn(
-                            "rounded-full px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] uppercase",
-                            c.status === "running"
-                              ? "bg-aqua text-paper"
-                              : c.status === "completed"
-                                ? "bg-paper-2 text-ink-3"
-                                : "bg-amber-wash text-amber",
-                          )}
-                        >
-                          {c.status}
-                        </span>
+                    <tr key={c.id} className="bg-white">
+                      <td className="text-ink rounded-l-[12px] px-4 py-3 align-top text-[13.5px] font-semibold">{c.name}</td>
+                      <td className="px-4 py-3 align-top">
+                        <Pill tone={c.status === "running" ? "cobalt" : c.status === "completed" ? "line" : "cream"}>{c.status}</Pill>
                       </td>
-                      <td className="text-ink-2 tnum py-3 pr-4 align-top font-mono text-[12px]">
+                      <td className="text-ink-2 tnum px-4 py-3 align-top font-mono text-[12px]">
                         {c.callWindowStartHour}:00–{c.callWindowEndHour}:00
                       </td>
-                      <td className="text-ink tnum py-3 pr-4 align-top font-mono text-[12.5px]">{p?.total ?? "—"}</td>
-                      <td className="text-ink-2 tnum py-3 pr-4 align-top font-mono text-[12.5px]">{p?.queued ?? "—"}</td>
-                      <td className="text-aqua tnum py-3 pr-4 align-top font-mono text-[12.5px]">{p?.completed ?? "—"}</td>
+                      <td className="text-ink tnum px-4 py-3 align-top text-[13px]">{p?.total ?? "—"}</td>
+                      <td className="text-ink-2 tnum px-4 py-3 align-top text-[13px]">{p?.queued ?? "—"}</td>
+                      <td className="text-cobalt tnum px-4 py-3 align-top text-[13px] font-semibold">{p?.completed ?? "—"}</td>
                       <td
                         className={cn(
-                          "tnum py-3 align-top font-mono text-[12.5px]",
-                          (p?.failed ?? 0) > 0 ? "text-magenta" : "text-ink-3",
+                          "tnum rounded-r-[12px] px-4 py-3 align-top text-[13px]",
+                          (p?.failed ?? 0) > 0 ? "text-rose font-semibold" : "text-ink-3",
                         )}
                       >
                         {p?.failed ?? "—"}
@@ -452,7 +459,7 @@ export default async function OpsPage() {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </Panel>
           ) : (
             <EmptyNote>
               No campaigns. Creating one needs an operator token — the route can dial real numbers, so it is closed
@@ -463,31 +470,37 @@ export default async function OpsPage() {
 
         {/* ---------------- Actions ---------------- */}
         <Section
+          icon={<Send className="h-3.5 w-3.5" />}
           eyebrow="Delivery"
           title="Where the lead goes next"
           note="A qualified lead sitting in a database is worth nothing. Each destination sits behind one provider interface, and none of them can fail a call — the transcript and summary are already saved by the time these run."
         >
-          <ul className="border-rule divide-rule-2 divide-y border-y">
+          <ul className="grid gap-2 lg:grid-cols-2">
             {providers.map((p) => (
-              <li key={p.name} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-3.5">
-                <span className="text-ink w-[20ch] shrink-0 font-mono text-[12.5px] font-semibold">{p.name}</span>
+              <li key={p.name} className="bg-frost flex items-start gap-4 rounded-[18px] px-4 py-4">
                 <span
                   className={cn(
-                    "rounded-full px-2 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] uppercase",
-                    p.configured ? "bg-aqua text-paper" : "bg-paper-2 text-ink-3",
+                    "flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px]",
+                    p.configured ? "bg-cobalt text-white" : "text-ink-3 bg-white",
                   )}
                 >
-                  {p.configured ? "live" : "not configured"}
+                  <Plug className="h-4 w-4" aria-hidden />
                 </span>
-                <span className="text-ink-2 min-w-[24ch] flex-1 text-[13px] leading-snug">
-                  {p.description}
-                  {p.hint ? <span className="text-ink-3 block text-[11.5px]">{p.hint}</span> : null}
+                <span className="min-w-0 flex-1">
+                  <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-ink font-mono text-[12.5px] font-semibold">{p.name}</span>
+                    <Pill tone={p.configured ? "cobalt" : "line"}>{p.configured ? "live" : "not configured"}</Pill>
+                  </span>
+                  <span className="text-ink-2 mt-1.5 block text-[13px] leading-snug">{p.description}</span>
+                  {p.hint ? <span className="text-ink-3 mt-1 block text-[11.5px]">{p.hint}</span> : null}
                 </span>
               </li>
             ))}
           </ul>
         </Section>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

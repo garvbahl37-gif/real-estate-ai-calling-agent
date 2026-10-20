@@ -1,8 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { CalendarClock, Check, MapPin, PhoneCall, Sparkles, Wallet } from "lucide-react";
+import { ProjectCard } from "@/components/ProjectCard";
+import { ProjectHero } from "@/components/ProjectHero";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
+import { Card, Chip, Panel, PriyaAvatar, btn } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { PROJECTS, formatInr, getProject } from "@/lib/projects";
+import { compactRange, configurations } from "@/lib/presentation";
 
 export function generateStaticParams() {
   return PROJECTS.map((p) => ({ id: p.id }));
@@ -15,180 +22,177 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: `${p.name} — Aarambh Realty`, description: p.tagline };
 }
 
-const STATUS_LABEL = {
-  ready_to_move: "Ready to move",
-  under_construction: "Under construction",
-  new_launch: "New launch",
-} as const;
-
 export default async function ProjectDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const p = getProject(id);
   if (!p) notFound();
 
-  const siblings = PROJECTS.filter((x) => x.id !== p.id && x.city === p.city).slice(0, 3);
+  const siblings = PROJECTS.filter((x) => x.id !== p.id && x.city === p.city).slice(0, 4);
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="mx-auto flex min-h-dvh max-w-[1440px] flex-col gap-3 p-2 sm:p-3 lg:p-4">
       <SiteHeader current="/projects" />
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 sm:px-8">
-        <div className="shiro mt-10">
-          <Link href="/projects" className="eyebrow hover:text-ink inline-flex min-h-9 items-center transition-colors">
-            ← All projects
-          </Link>
+      <ProjectHero project={p} />
 
-          <div className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="eyebrow">{STATUS_LABEL[p.status]}</span>
-            <span className="text-ink-3 font-mono text-[10.5px]">{p.reraId}</span>
-          </div>
-
-          <h1 className="font-display text-ink mt-2 text-[34px] leading-[1.1] sm:text-[46px]">{p.name}</h1>
-          <p className="text-ink-2 mt-2 text-[15px]">
-            {p.locality}, {p.city} · {p.microMarket}
-          </p>
-          <p className="text-ink-2 mt-4 max-w-[62ch] text-[16px] leading-relaxed">{p.tagline}</p>
-        </div>
-
-        {/* Headline numbers */}
-        <dl className="mt-10 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
+      {/* Headline numbers */}
+      <Card className="px-5 py-8 sm:px-8">
+        <p className="text-ink-2 max-w-[70ch] text-[16px] leading-relaxed">{p.tagline}</p>
+        <dl className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
             { k: "Price band", v: p.priceRangeLabel },
             { k: "Booking amount", v: formatInr(p.bookingAmountInr) },
             { k: "Property type", v: p.propertyType },
-            { k: "Configurations", v: Array.from(new Set(p.units.filter((u) => u.available).map((u) => u.configuration))).join(" · ") },
-          ].map((s) => (
-            <div key={s.k} className="shiro shiro-soft">
-              <dt className="eyebrow">{s.k}</dt>
-              <dd className="font-display text-ink mt-1.5 text-[19px] leading-tight capitalize">{s.v}</dd>
+            { k: "Configurations", v: configurations(p).join(" · ") },
+          ].map((s, i) => (
+            <div key={s.k} className={cn("rounded-[20px] px-5 py-5", i === 0 ? "bg-cobalt text-white" : "wash-soft")}>
+              <dt className={cn("text-[12px] font-medium", i === 0 ? "text-white/75" : "text-ink-3")}>{s.k}</dt>
+              <dd className={cn("mt-2 text-[20px] leading-tight font-medium tracking-[-0.02em] capitalize", i === 0 ? "text-white" : "text-ink")}>
+                {s.v}
+              </dd>
             </div>
           ))}
         </dl>
+      </Card>
 
-        <div className="mt-14 grid gap-x-16 gap-y-12 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)]">
-          {/* Left column. min-w-0 is load-bearing: a grid child defaults to
-              min-width:auto, so the inventory table's min-w-[420px] would push
-              the column past a 390px viewport and the overflow-x-auto wrapper
-              inside it could never shrink to scroll. */}
-          <div className="min-w-0">
-            <section className="shiro">
-              <span className="eyebrow">Inventory</span>
-              <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[420px] border-collapse text-left">
-                  <thead>
-                    <tr className="border-rule border-b">
-                      {["Type", "Saleable", "Carpet", "Price"].map((h) => (
-                        <th key={h} className="text-ink-3 pb-2 font-mono text-[9.5px] font-normal tracking-[0.08em] uppercase">
-                          {h}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {p.units.map((u, i) => (
-                      <tr key={`${u.configuration}-${i}`} className="border-rule-2 border-b last:border-b-0">
-                        <td className="text-ink py-2.5 text-[13.5px] font-semibold">
-                          {u.configuration}
-                          {!u.available ? <span className="text-magenta ml-1.5 text-[10px]">sold out</span> : null}
-                        </td>
-                        <td className="text-ink-2 tnum py-2.5 font-mono text-[12px]">{u.saleableAreaSqft} ft²</td>
-                        <td className="text-ink-2 tnum py-2.5 font-mono text-[12px]">{u.carpetAreaSqft} ft²</td>
-                        <td className="text-ink tnum py-2.5 font-mono text-[12px]">
-                          {formatInr(u.priceMinInr)}
-                          {u.priceMaxInr !== u.priceMinInr ? `–${formatInr(u.priceMaxInr)}` : ""}
-                        </td>
-                      </tr>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,440px)]">
+        {/* Left column. min-w-0 is load-bearing: a grid child defaults to
+            min-width:auto, so the inventory table's min-w-[420px] would push
+            the column past a 390px viewport and the overflow-x-auto wrapper
+            inside it could never shrink to scroll. */}
+        <Card className="min-w-0 px-5 py-8 sm:px-8">
+          <section id="inventory" className="scroll-mt-6">
+            <h2 className="text-ink text-[20px] font-semibold tracking-[-0.015em]">Inventory</h2>
+            <Panel className="mt-4 overflow-x-auto p-2">
+              <table className="w-full min-w-[420px] border-separate border-spacing-y-1.5 text-left">
+                <thead>
+                  <tr>
+                    {["Type", "Saleable", "Carpet", "Price"].map((h) => (
+                      <th key={h} className="text-ink-3 px-4 pb-1 text-[12px] font-medium">
+                        {h}
+                      </th>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-
-            <section className="shiro shiro-soft mt-12">
-              <span className="eyebrow">Possession</span>
-              <p className="text-ink-2 mt-2 text-[14px] leading-relaxed">{p.possession}</p>
-            </section>
-
-            <section className="shiro shiro-soft mt-12">
-              <span className="eyebrow">Why buyers pick it</span>
-              <ul className="mt-3 space-y-2">
-                {p.usps.map((u) => (
-                  <li key={u} className="text-ink-2 border-aqua/30 border-l-2 pl-3 text-[14px] leading-relaxed">
-                    {u}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="shiro shiro-soft mt-12">
-              <span className="eyebrow">Payment plans</span>
-              <ul className="text-ink-2 mt-3 space-y-2 text-[14px] leading-relaxed">
-                {p.paymentPlans.map((pl) => (
-                  <li key={pl} className="border-rule-2 border-b pb-2 last:border-b-0">
-                    {pl}
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="bg-paper-2 mt-12 rounded-sm px-5 py-4">
-              <span className="eyebrow">How she pitches it out loud</span>
-              <p className="font-display text-ink mt-2 text-[16px] leading-[1.8]">&ldquo;{p.pitchHinglish}&rdquo;</p>
-            </section>
-          </div>
-
-          {/* Right column */}
-          <aside className="min-w-0">
-            <section className="shiro">
-              <span className="eyebrow">Location advantages</span>
-              <ul className="mt-3">
-                {p.locationAdvantages.map((l) => (
-                  <li key={l.label} className="border-rule-2 flex items-baseline justify-between gap-4 border-b py-2 last:border-b-0">
-                    <span className="text-ink-2 text-[13.5px]">{l.label}</span>
-                    <span className="text-ink-3 shrink-0 font-mono text-[11px]">{l.distance}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-
-            <section className="shiro shiro-soft mt-12">
-              <span className="eyebrow">Amenities</span>
-              <div className="mt-3 flex flex-wrap gap-1.5">
-                {p.amenities.map((a) => (
-                  <span key={a} className="border-rule text-ink-2 rounded-full border px-2.5 py-1 text-[11.5px]">
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </section>
-
-            {siblings.length ? (
-              <section className="shiro shiro-soft mt-12">
-                <span className="eyebrow">Also in {p.city}</span>
-                <ul className="mt-3 space-y-2">
-                  {siblings.map((s) => (
-                    <li key={s.id}>
-                      <Link href={`/projects/${s.id}`} className="group block py-1">
-                        <span className="text-ink group-hover:text-aqua text-[13.5px] font-semibold transition-colors">
-                          {s.name.replace("Aarambh ", "")}
-                        </span>
-                        <span className="text-ink-3 block font-mono text-[11px]">{s.priceRangeLabel}</span>
-                      </Link>
-                    </li>
+                  </tr>
+                </thead>
+                <tbody>
+                  {p.units.map((u, i) => (
+                    <tr key={`${u.configuration}-${i}`} className="bg-white">
+                      <td className="text-ink rounded-l-[12px] px-4 py-3 text-[14px] font-semibold">
+                        {u.configuration}
+                        {!u.available ? (
+                          <span className="bg-rose-wash text-rose ml-2 rounded-full px-2 py-0.5 text-[10.5px] font-semibold">
+                            sold out
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="text-ink-2 tnum px-4 py-3 text-[13px]">{u.saleableAreaSqft.toLocaleString("en-IN")} ft²</td>
+                      <td className="text-ink-2 tnum px-4 py-3 text-[13px]">{u.carpetAreaSqft.toLocaleString("en-IN")} ft²</td>
+                      <td className="text-ink tnum rounded-r-[12px] px-4 py-3 text-[13px] font-semibold">
+                        {compactRange(u.priceMinInr, u.priceMaxInr)}
+                      </td>
+                    </tr>
                   ))}
-                </ul>
-              </section>
-            ) : null}
+                </tbody>
+              </table>
+            </Panel>
+          </section>
 
-            <Link
-              href="/call"
-              className="bg-ink text-paper hover:bg-aqua mt-12 flex min-h-12 items-center justify-center rounded-sm text-[14px] font-semibold transition-colors"
-            >
-              Ask Priya about this
-            </Link>
-          </aside>
+          <section className="mt-10">
+            <h2 className="text-ink flex items-center gap-2 text-[20px] font-semibold tracking-[-0.015em]">
+              <CalendarClock className="text-cobalt h-5 w-5" aria-hidden /> Possession
+            </h2>
+            <p className="text-ink-2 mt-3 text-[14.5px] leading-relaxed">{p.possession}</p>
+          </section>
+
+          <section className="mt-10">
+            <h2 className="text-ink flex items-center gap-2 text-[20px] font-semibold tracking-[-0.015em]">
+              <Sparkles className="text-cobalt h-5 w-5" aria-hidden /> Why buyers pick it
+            </h2>
+            <ul className="mt-4 space-y-2.5">
+              {p.usps.map((u) => (
+                <li key={u} className="text-ink-2 flex items-start gap-3 text-[14px] leading-relaxed">
+                  <span className="bg-cobalt mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-white">
+                    <Check className="h-3 w-3" strokeWidth={3} aria-hidden />
+                  </span>
+                  {u}
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section className="mt-10">
+            <h2 className="text-ink flex items-center gap-2 text-[20px] font-semibold tracking-[-0.015em]">
+              <Wallet className="text-cobalt h-5 w-5" aria-hidden /> Payment plans
+            </h2>
+            <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+              {p.paymentPlans.map((pl) => (
+                <li key={pl} className="wash-soft text-ink-2 rounded-[16px] px-4 py-3 text-[13.5px] leading-relaxed">
+                  {pl}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </Card>
+
+        {/* Right column */}
+        <div className="flex min-w-0 flex-col gap-3">
+          <Card className="p-2.5 sm:p-3">
+            <div className="wash rounded-[22px] p-5">
+              <Chip tone="white">How she pitches it out loud</Chip>
+              <div className="mt-5 flex items-start gap-2.5">
+                <PriyaAvatar size={32} className="mt-1" />
+                <p className="text-ink rounded-[18px] rounded-tl-[6px] bg-white px-4 py-3 text-[15px] leading-[1.7]">
+                  &ldquo;{p.pitchHinglish}&rdquo;
+                </p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="px-5 py-7 sm:px-7">
+            <h2 className="text-ink text-[18px] font-semibold tracking-[-0.015em]">Location advantages</h2>
+            <ul className="mt-4 space-y-1.5">
+              {p.locationAdvantages.map((l) => (
+                <li key={l.label} className="bg-frost flex items-center gap-3 rounded-[14px] px-3.5 py-2.5">
+                  <MapPin className="text-cobalt h-4 w-4 shrink-0" aria-hidden />
+                  <span className="text-ink-2 min-w-0 flex-1 text-[13.5px]">{l.label}</span>
+                  <span className="text-navy shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[11.5px] font-semibold">
+                    {l.distance}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+
+          <Card className="px-5 py-7 sm:px-7">
+            <h2 className="text-ink text-[18px] font-semibold tracking-[-0.015em]">Amenities</h2>
+            <div className="mt-4 flex flex-wrap gap-1.5">
+              {p.amenities.map((a) => (
+                <span key={a} className="bg-ice text-navy rounded-full px-3 py-1.5 text-[12px] font-medium">
+                  {a}
+                </span>
+              ))}
+            </div>
+          </Card>
+
+          <Link href="/call" className={cn(btn("primary", "lg"), "w-full")}>
+            <PhoneCall className="h-4 w-4" aria-hidden />
+            Ask Priya about this
+          </Link>
         </div>
-      </main>
+      </div>
+
+      {siblings.length ? (
+        <Card className="px-5 py-8 sm:px-8 sm:py-10">
+          <Chip>Also in {p.city}</Chip>
+          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {siblings.map((s) => (
+              <ProjectCard key={s.id} project={s} />
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      <SiteFooter />
     </div>
   );
 }

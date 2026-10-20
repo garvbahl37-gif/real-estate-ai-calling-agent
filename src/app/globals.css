@@ -1,34 +1,44 @@
 @import "tailwindcss";
 
 /*
-  Palette note: the accents are lifted from Delhi NCR transit line branding —
-  the Aqua Line runs past Sector 150 and the Magenta Line is the other half of
-  the corridor these projects sell on. Teal is the resting state, magenta is
-  "live". Sodium amber is the street-light colour, used only for warm leads.
+  Palette note: sampled from the Get Talky brand board so every surface stays
+  in one key. Periwinkle is the backdrop the white cards float on, cobalt is
+  the one action colour, mid blue is the second data colour (it replaces the
+  pink and lilac in the CRM and catalogue references), and the pale blues are
+  fills. Rose is kept for exactly two things: hanging up and errors.
 */
 @theme {
-  --color-paper: #faf9f6;
-  --color-paper-2: #f3f1ec;
-  --color-ink: #15171e;
-  --color-ink-2: #464a56;
-  --color-ink-3: #7c8090;
-  --color-rule: #dcd8cf;
-  --color-rule-2: #ebe8e1;
+  --color-backdrop: #b1cefa;
+  --color-canvas: #ffffff;
+  --color-frost: #f4f7ff;
+  --color-ice: #e9f1fd;
+  --color-pale: #cfe4ff;
+  --color-mid: #8bb7f0;
+  --color-cobalt: #325ced;
+  --color-cobalt-deep: #2346d4;
+  --color-navy: #13286e;
 
-  --color-aqua: #0b6e6e;
-  --color-aqua-2: #0e8c8c;
-  --color-aqua-wash: #e3f0ef;
+  --color-ink: #111318;
+  --color-ink-2: #4a5061;
+  --color-ink-3: #868c9c;
+  --color-line: #e2e8f3;
+  --color-line-2: #eef2f8;
 
-  --color-magenta: #c21e56;
-  --color-magenta-2: #e0447a;
-  --color-magenta-wash: #fbe7ee;
+  --color-cream: #fbefe0;
+  --color-amber: #9a5b06;
+  --color-rose: #e5484d;
+  --color-rose-wash: #fdecec;
 
-  --color-amber: #b8681a;
-  --color-amber-wash: #f8eddf;
-
-  --font-display: var(--font-tiro), Georgia, serif;
-  --font-sans: var(--font-archivo), "Noto Sans Devanagari", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-jakarta), var(--font-devanagari), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-mono-face), ui-monospace, "SF Mono", monospace;
+  --font-hand: var(--font-caveat), "Bradley Hand", cursive;
+
+  --radius-card: 1.75rem;
+  --radius-panel: 1.375rem;
+
+  --shadow-soft: 0 1px 2px rgb(19 40 110 / 0.04), 0 10px 30px -14px rgb(19 40 110 / 0.16);
+  --shadow-float: 0 22px 44px -20px rgb(19 40 110 / 0.42);
+  --shadow-cta: 0 10px 22px -10px rgb(50 92 237 / 0.7), inset 0 1px 0 rgb(255 255 255 / 0.22);
 }
 
 :root {
@@ -41,43 +51,58 @@ html {
 }
 
 body {
-  background: var(--color-paper);
+  background: var(--color-backdrop);
   color: var(--color-ink);
   font-family: var(--font-sans);
   min-height: 100%;
 }
 
-/* ------------------------------------------------------------------ */
-/* शिरोरेखा — the horizontal stroke that binds letters into a word in   */
-/* Devanagari. Here it binds the interface: sections hang from one.     */
-/* ------------------------------------------------------------------ */
-
-.shiro {
-  position: relative;
-  padding-top: 0.75rem;
-}
-.shiro::before {
-  content: "";
-  position: absolute;
-  inset-inline: 0;
-  top: 0;
-  height: 1.5px;
-  background: var(--color-ink);
-}
-.shiro-soft::before {
-  background: var(--color-rule);
-}
-
-.eyebrow {
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+/* Small grey label above a value. The chip-style section label lives in ui.tsx. */
+.label {
+  font-size: 0.75rem;
+  line-height: 1.2;
+  font-weight: 500;
   color: var(--color-ink-3);
 }
 
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* The pale box behind the key word of a headline, as on the Get Talky hero. */
+.highlight {
+  background: linear-gradient(180deg, transparent 6%, var(--color-ice) 6%, var(--color-ice) 96%, transparent 96%);
+  border-radius: 0.6rem;
+  padding: 0 0.18em;
+  margin: 0 -0.06em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* Frosted bubble that sits on a photograph. */
+.glass {
+  background: rgb(255 255 255 / 0.2);
+  border: 1px solid rgb(255 255 255 / 0.55);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
+  color: #fff;
+}
+.glass-dark {
+  background: rgb(15 28 74 / 0.38);
+  border: 1px solid rgb(255 255 255 / 0.22);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  backdrop-filter: blur(14px) saturate(140%);
+  color: #fff;
+}
+
+/* Soft blue wash used on feature cards. */
+.wash {
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgb(255 255 255 / 0.9), transparent 60%),
+    linear-gradient(160deg, #e3edfd 0%, #d3e3fb 100%);
+}
+.wash-soft {
+  background: linear-gradient(180deg, #f6f9ff 0%, #ecf2fd 100%);
 }
 
 /* ------------------------------------------------------------------ */
@@ -97,6 +122,18 @@ body {
   animation: pulse-live 1.6s ease-in-out infinite;
 }
 
+@keyframes live-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgb(50 92 237 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(50 92 237 / 0);
+  }
+}
+.live-ring {
+  animation: live-ring 1.6s ease-out infinite;
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -111,9 +148,36 @@ body {
   animation: rise-in 0.34s cubic-bezier(0.2, 0.7, 0.3, 1) both;
 }
 
+@keyframes bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bubble-in {
+  animation: bubble-in 0.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+.drift {
+  animation: drift 6s ease-in-out infinite;
+}
+
 @keyframes field-land {
   0% {
-    background-color: var(--color-aqua-wash);
+    background-color: var(--color-pale);
   }
   100% {
     background-color: transparent;
@@ -143,31 +207,390 @@ body {
   animation-delay: 0.3s;
 }
 
+/* ------------------------------------------------------------------ */
+/* Motion, after the Get Talky reel                                    */
+/* ------------------------------------------------------------------ */
+
+/*
+  The landing page opens with a ~3s splash. Everything in the hero waits for it
+  through --intro, which drops to zero once the splash has been seen this
+  session (an inline script sets .intro-seen before first paint).
+*/
+:root {
+  --intro: 3.1s;
+}
+.intro-seen {
+  --intro: 0s;
+}
+.intro-seen .intro-splash {
+  display: none;
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+.intro-splash {
+  animation: splash-out 0.5s ease-in 2.75s forwards;
+}
+.intro-splash.is-skipped {
+  animation-delay: 0s;
+  animation-duration: 0.25s;
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+.eq-bar {
+  transform-origin: center;
+  animation: eq 0.9s ease-in-out infinite;
+}
+
+@keyframes splash-bars {
+  0%,
+  80% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@keyframes splash-mark {
+  from {
+    opacity: 0;
+    transform: scale(0.55) rotate(-12deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes wipe-in {
+  from {
+    clip-path: inset(0 100% 0 0);
+    opacity: 0.4;
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade-away {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.96);
+  }
+}
+
+/* Hero reveal: word by word, out of a blur, as on the reference. */
+@keyframes word-in {
+  from {
+    opacity: 0;
+    filter: blur(10px);
+    transform: translateY(0.22em);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+.word-in {
+  display: inline-block;
+  opacity: 0;
+  animation: word-in 0.75s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: calc(var(--intro) + 0.15s + var(--w, 0) * 85ms);
+}
+.fade-in-up {
+  opacity: 0;
+  animation: word-in 0.8s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+  animation-delay: calc(var(--intro) + var(--d, 0ms));
+}
+
+@keyframes highlight-grow {
+  from {
+    background-size: 0% 100%;
+  }
+  to {
+    background-size: 100% 100%;
+  }
+}
+.highlight-in {
+  background-repeat: no-repeat;
+  background-size: 0% 100%;
+  animation: highlight-grow 0.7s cubic-bezier(0.6, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--intro) + var(--d, 0.9s));
+}
+
+.draw-in {
+  stroke-dasharray: 120;
+  stroke-dashoffset: 120;
+  animation: draw 0.9s ease-out forwards;
+  animation-delay: calc(var(--intro) + var(--d, 1.3s));
+}
+
+@keyframes phone-rise {
+  from {
+    opacity: 0;
+    transform: translateY(70px) rotate(8deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-4deg);
+  }
+}
+.phone-rise {
+  opacity: 0;
+  animation: phone-rise 1.1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  animation-delay: calc(var(--intro) + 0.35s);
+}
+
+/* Scroll reveal, driven by <Reveal>. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(22px);
+  filter: blur(6px);
+  transition:
+    opacity 0.7s ease,
+    transform 0.85s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 0.7s ease;
+  transition-delay: var(--d, 0ms);
+}
+[data-reveal="right"] {
+  transform: translateX(60px);
+}
+/* Cards come up from well below, as the reel's card rows do. */
+[data-reveal="rise"] {
+  transform: translateY(90px);
+  filter: blur(4px);
+}
+/*
+  Headings fill in word by word, pale to ink, the way the reel's section
+  titles do. The wrapper stays put; only its words move.
+*/
+[data-reveal="words"] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.rt-word {
+  display: inline-block;
+  color: #c6d4ee;
+  filter: blur(6px);
+  transform: translateY(0.2em);
+  transition:
+    color 0.75s ease,
+    filter 0.7s ease,
+    transform 0.85s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: calc(var(--d, 0ms) + var(--w, 0) * 55ms);
+}
+[data-reveal="words"][data-in] .rt-word {
+  color: var(--rt-to, var(--color-ink));
+  filter: none;
+  transform: none;
+}
+/* A photo settles out of a slight zoom as its card arrives. */
+[data-reveal] .reveal-zoom {
+  transform: scale(1.14);
+  transition: transform 1.6s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition-delay: var(--d, 0ms);
+}
+[data-reveal][data-in] .reveal-zoom {
+  transform: none;
+}
+[data-reveal][data-in] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+/* Children that play in order once their <Reveal> is on screen: --i is the step. */
+[data-reveal] .seq {
+  opacity: 0;
+}
+[data-reveal][data-in] .seq {
+  animation: bubble-in 0.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  animation-delay: calc(var(--d, 0ms) + 350ms + var(--i, 0) * 520ms);
+}
+
+/*
+  The pinned "How it works" story. One step is on stage at a time: the next
+  slides in from the right out of a blur, the last slides away to the left,
+  and the stage's .seq children play in order each time it arrives.
+*/
+.how-step {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateX(12%);
+  filter: blur(6px);
+  pointer-events: none;
+  transition:
+    opacity 0.6s ease,
+    transform 0.95s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 0.6s ease;
+}
+.how-step[data-state="active"] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  pointer-events: auto;
+}
+.how-step[data-state="past"] {
+  transform: translateX(-12%);
+}
+.how-step .seq {
+  opacity: 0;
+}
+.how-step[data-state="active"] .seq {
+  animation: bubble-in 0.5s cubic-bezier(0.2, 0.8, 0.25, 1) both;
+  animation-delay: calc(450ms + var(--i, 0) * 480ms);
+}
+.how-title {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(8px);
+  transition:
+    opacity 0.55s ease,
+    transform 0.8s cubic-bezier(0.2, 0.7, 0.2, 1),
+    filter 0.55s ease;
+}
+.how-title[data-state="active"] {
+  opacity: 1;
+  transform: none;
+  filter: none;
+}
+.how-title[data-state="past"] {
+  transform: translateY(-18px);
+}
+/* Step one's handset flies up from the corner and settles on a tilt, as in the reel. */
+.how-phone {
+  opacity: 0;
+  transform: translate(120px, 260px) rotate(28deg);
+  transition:
+    opacity 0.6s ease 0.15s,
+    transform 1.15s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s;
+}
+.how-step[data-state="active"] .how-phone {
+  opacity: 1;
+  transform: rotate(8deg);
+}
+.how-glow {
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 0.9s ease 0.4s,
+    transform 1.1s ease 0.4s;
+}
+.how-step[data-state="active"] .how-glow {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes marquee {
+  to {
+    transform: translateX(-50%);
+  }
+}
+.marquee {
+  animation: marquee 32s linear infinite;
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin-slow {
+  animation: spin-slow 14s linear infinite;
+}
+/* Avatars circling Priya: the ring turns, each face turns back so it stays upright. */
+.orbit {
+  animation: spin-slow 26s linear infinite;
+}
+.orbit-upright {
+  animation: spin-slow 26s linear infinite reverse;
+}
+
+/* Placeholder blocks while a database-backed page renders. */
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(90deg, #e9eff9 0%, #f6f9ff 45%, #e9eff9 90%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+@keyframes caret {
+  50% {
+    opacity: 0;
+  }
+}
+.caret {
+  animation: caret 0.9s steps(1) infinite;
+}
+
 ::selection {
-  background: var(--color-aqua);
-  color: var(--color-paper);
+  background: var(--color-cobalt);
+  color: #fff;
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-aqua);
+  outline: 2px solid var(--color-cobalt);
   outline-offset: 2px;
-  border-radius: 2px;
+  border-radius: 6px;
 }
 
 .thin-scroll {
   scrollbar-width: thin;
-  scrollbar-color: var(--color-rule) transparent;
+  scrollbar-color: var(--color-pale) transparent;
 }
 .thin-scroll::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 .thin-scroll::-webkit-scrollbar-thumb {
-  background: var(--color-rule);
+  background: var(--color-pale);
   border-radius: 3px;
 }
 .thin-scroll::-webkit-scrollbar-track {
   background: transparent;
+}
+
+details > summary {
+  list-style: none;
+}
+details > summary::-webkit-details-marker {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -176,6 +599,14 @@ body {
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
     transition-duration: 0.01ms !important;
+    transition-delay: 0s !important;
+  }
+  .intro-splash {
+    display: none;
+  }
+  .marquee {
+    animation: none;
   }
 }
