@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
+import { GEMINI_API_KEYS, MODEL_ATTEMPT_TIMEOUT_MS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
 import { PROJECTS, formatInr, getProject } from "./projects";
 import type { CallRecord, ClaimVerdict, FactClaim, GroundednessReport } from "./types";
 
@@ -279,6 +279,8 @@ ${speech}`;
             responseSchema: EXTRACTION_SCHEMA,
             temperature: 0,
             thinkingConfig: { thinkingBudget: 0 },
+            // A busy model can sit on a request for most of a minute before refusing it.
+            httpOptions: { timeout: MODEL_ATTEMPT_TIMEOUT_MS },
           },
         });
         if (!res.text) continue;

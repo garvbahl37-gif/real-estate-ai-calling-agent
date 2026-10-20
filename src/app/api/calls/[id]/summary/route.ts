@@ -9,9 +9,11 @@ import { callIdSchema } from "@/lib/validation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// One Flash call with thinking disabled — 60s is generous, but leaves room for
-// a cold start on the free tier.
-export const maxDuration = 60;
+// One Flash call with thinking disabled usually finishes in seconds. The
+// headroom is for the bad case: each model attempt is capped at
+// MODEL_ATTEMPT_TIMEOUT_MS, and when the preferred model is overloaded the
+// passes fall down the model list — 60s ran out before the fallback answered.
+export const maxDuration = 120;
 
 type Ctx = { params: Promise<{ id: string }> };
 

@@ -73,15 +73,24 @@ export function isQuotaError(message: string): boolean {
 
 /**
  * True when the model itself is overloaded — 503 UNAVAILABLE, "currently
- * experiencing high demand". Unlike quota this is per model, not per key: every
- * key gets the same answer from that model, but the next model in
+ * experiencing high demand" — or too slow to answer at all (our own per-attempt
+ * timeout aborting it, or a 504). Unlike quota this is per model, not per key:
+ * every key gets the same answer from that model, but the next model in
  * TEXT_MODEL_FALLBACKS usually answers. Treating it as a hard failure left every
  * call unscored for as long as gemini-3.5-flash was busy, with a working
  * fallback one line further down the list.
  */
 export function isOverloadError(message: string): boolean {
-  return /\b503\b|UNAVAILABLE|overloaded|high demand/i.test(message);
+  return /\b50[34]\b|UNAVAILABLE|DEADLINE_EXCEEDED|overloaded|high demand|aborted|timed out/i.test(message);
 }
+
+/**
+ * Longest one model gets to answer one post-call pass before we move on. A
+ * summary normally takes ~2 s; an overloaded model can hold the request for
+ * most of a minute before refusing it, which on its own used up the summary
+ * route's whole duration and left nothing for the fallbacks.
+ */
+export const MODEL_ATTEMPT_TIMEOUT_MS = 15_000;
 
 /**
  * Dev escape hatch. Ephemeral tokens are the correct way to drive the Live API

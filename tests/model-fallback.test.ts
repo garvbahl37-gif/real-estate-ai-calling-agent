@@ -42,6 +42,13 @@ describe("model fallback classification", () => {
     }
   });
 
+  it("moves on from a model that is too slow to answer", () => {
+    // Our own per-attempt timeout aborts the fetch; the gateway can also give up.
+    assert.equal(isOverloadError("This operation was aborted"), true);
+    assert.equal(isOverloadError('got status: 504 Gateway Timeout. {"error":{"status":"DEADLINE_EXCEEDED"}}'), true);
+    assert.equal(isQuotaError("This operation was aborted"), false);
+  });
+
   it("does not read 503 out of a longer number", () => {
     // A transcript id or an amount in the message must not look like a status.
     assert.equal(isOverloadError("call_15035 failed: invalid response"), false);

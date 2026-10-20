@@ -1,6 +1,6 @@
 import "server-only";
 import { GoogleGenAI, Type } from "@google/genai";
-import { GEMINI_API_KEYS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
+import { GEMINI_API_KEYS, MODEL_ATTEMPT_TIMEOUT_MS, TEXT_MODEL_FALLBACKS, isOverloadError, isQuotaError } from "./config";
 import { PROJECTS, formatInr } from "./projects";
 import type { CallRecord, CallSummary, LeadRequirements } from "./types";
 
@@ -199,6 +199,8 @@ ${PROJECTS.map((p) => `- ${p.id}: ${p.name}, ${p.locality} ${p.city}, ${p.priceR
             temperature: 0.3,
             // A short structured extraction — thinking buys nothing and costs latency.
             thinkingConfig: { thinkingBudget: 0 },
+            // A busy model can sit on a request for most of a minute before refusing it.
+            httpOptions: { timeout: MODEL_ATTEMPT_TIMEOUT_MS },
           },
         });
 
