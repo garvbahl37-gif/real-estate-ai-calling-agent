@@ -67,7 +67,7 @@ console.log("\n=== TRANSCRIPT ===");
 console.log(
   await page.evaluate(() => {
     const out = [];
-    document.querySelectorAll("p.border-l-2").forEach((p) => {
+    document.querySelectorAll("p[data-turn]").forEach((p) => {
       const who = p.parentElement?.querySelector("span")?.textContent ?? "?";
       out.push(`${who.padEnd(7)} ${p.textContent.trim()}`);
     });

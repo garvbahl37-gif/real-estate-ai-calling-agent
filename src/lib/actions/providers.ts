@@ -39,6 +39,10 @@ function leadPayload(call: CallRecord) {
     financing: r.financing,
     interestedProjects: (r.interestedProjectIds ?? []).map((id) => ({ id, name: getProject(id)?.name })),
     siteVisit: r.siteVisitRequested ? { requested: true, preference: r.siteVisitPreference } : undefined,
+    // The other half of "what happens next". A site visit on Saturday and a
+    // confirmation call on Friday are two different promises, and a CRM that
+    // only carries the first drops the one that has to happen sooner.
+    callback: r.callbackPreference ?? call.handoff?.preferredTime,
     qualification: call.summary?.qualification,
     headline: call.summary?.headline,
     nextAction: call.summary?.nextAction,
@@ -229,7 +233,7 @@ export const whatsappProvider: ActionProvider = {
   isConfigured: () => Boolean(process.env.WHATSAPP_TOKEN && process.env.WHATSAPP_PHONE_ID),
   configurationHint: () =>
     "Needs WHATSAPP_TOKEN and WHATSAPP_PHONE_ID from a WhatsApp Business account. " +
-    "Not free, so it is unconfigured in this deployment.",
+    "Not free, so it is unconfigured in this deployment. Also set WHATSAPP_TEMPLATE_NAME — see below.",
 
   shouldRun: ({ call }) => Boolean(call.requirements.phone ?? call.fromNumber),
 
@@ -250,24 +254,78 @@ export const whatsappProvider: ActionProvider = {
       "— Aarambh Realty",
     ].join("\n");
 
+    /*
+     * Why this cannot be a plain text message.
+     *
+     * Meta only accepts free-form content inside the 24-hour customer service
+     * window, and that window is opened by the *user* messaging the business —
+     * never by the business calling them. A recap after a voice call is by
+     * definition outside it, so `type: "text"` is rejected with error 131047
+     * ("Re-engagement message") for essentially every real lead. It succeeds
+     * only when testing against a number that happens to have messaged you
+     * recently, which is exactly how this survives a manual test and fails in
+     * production.
+     *
+     * Outside the window the only thing that sends is a pre-approved template.
+     * So the template is the path, and the free-form body below is the fallback
+     * for the case where the caller did message first.
+     */
+    const template = process.env.WHATSAPP_TEMPLATE_NAME;
+    const payload = template
+      ? {
+          messaging_product: "whatsapp",
+          to: to.replace(/^\+/, ""),
+          type: "template",
+          template: {
+            name: template,
+            language: { code: process.env.WHATSAPP_TEMPLATE_LOCALE ?? "en" },
+            // Positional parameters, so the template body reads
+            // "Namaste {{1}}, ... {{2}}". Meta rejects a parameter count that
+            // does not match the approved template, so this stays at two.
+            components: [
+              {
+                type: "body",
+                parameters: [
+                  { type: "text", text: call.requirements.name ?? "there" },
+                  { type: "text", text: projects.join("; ") || "the options we discussed" },
+                ],
+              },
+            ],
+          },
+        }
+      : {
+          messaging_product: "whatsapp",
+          to: to.replace(/^\+/, ""),
+          type: "text",
+          text: { body },
+        };
+
     const res = await fetch(`https://graph.facebook.com/v21.0/${process.env.WHATSAPP_PHONE_ID}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to: to.replace(/^\+/, ""),
-        type: "text",
-        text: { body },
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(8000),
     });
 
-    return res.ok
-      ? { status: "sent" as const, detail: `Recap sent to ${to}.` }
-      : { status: "failed" as const, detail: `WhatsApp API returned HTTP ${res.status}.` };
+    if (res.ok) return { status: "sent" as const, detail: `Recap sent to ${to}.` };
+
+    // An HTTP status alone is not debuggable here: Meta returns 400 for a bad
+    // token, an unapproved template and a closed 24-hour window alike, and the
+    // code that separates them is only in the body.
+    const err = (await res.json().catch(() => null)) as { error?: { code?: number; message?: string } } | null;
+    const code = err?.error?.code;
+    const detail =
+      code === 131047
+        ? "Outside WhatsApp's 24-hour window, so free-form text was rejected. Set WHATSAPP_TEMPLATE_NAME " +
+          "to an approved template — a business cannot open the window by calling someone."
+        : err?.error?.message
+          ? `WhatsApp API refused it (HTTP ${res.status}, code ${code ?? "?"}): ${err.error.message}`
+          : `WhatsApp API returned HTTP ${res.status}.`;
+
+    return { status: "failed" as const, detail, data: { status: res.status, code } };
   },
 };
 

@@ -2,9 +2,12 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatInr } from "@/lib/projects";
 import type { Project } from "@/lib/types";
+import { ProjectCard } from "@/components/ProjectCard";
+import { Chip } from "@/components/ui";
 
 /**
  * The catalogue, organised along a budget axis.
@@ -59,185 +62,167 @@ export function ProjectCatalogue({ projects }: { projects: Project[] }) {
   );
 
   const reset = market !== "all" || type !== "all" || status !== "all";
+  const clear = () => {
+    setMarket("all");
+    setType("all");
+    setStatus("all");
+  };
 
   return (
-    <div>
+    <div className="flex flex-col gap-3">
       {/* ---- Filters ---- */}
-      <div className="shiro">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <span className="eyebrow">Filter</span>
-          <span className="text-ink-3 tnum font-mono text-[10px]">
-            {shown.length} of {projects.length}
+      <section className="bg-canvas rounded-card px-5 py-6 sm:px-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-ink flex items-center gap-2 text-[16px] font-semibold">
+            <SlidersHorizontal className="text-cobalt h-4 w-4" aria-hidden /> Filter
+          </p>
+          <span className="text-ink-3 tnum text-[12.5px]">
+            <span className="text-ink font-semibold">{shown.length}</span> of {projects.length} projects
           </span>
         </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap gap-x-8 gap-y-4">
-        <FilterGroup
-          label="Market"
-          value={market}
-          onChange={setMarket}
-          options={[{ value: "all", label: "All" }, ...markets.map((m) => ({ value: m, label: m }))]}
-        />
-        <FilterGroup
-          label="Type"
-          value={type}
-          onChange={(v) => setType(v as TypeFilter)}
-          options={[{ value: "all", label: "All" }, ...types.map((t) => ({ value: t, label: t }))]}
-        />
-        <FilterGroup
-          label="Status"
-          value={status}
-          onChange={(v) => setStatus(v as StatusFilter)}
-          options={[
-            { value: "all", label: "All" },
-            { value: "ready_to_move", label: "Ready" },
-            { value: "under_construction", label: "Under construction" },
-            { value: "new_launch", label: "New launch" },
-          ]}
-        />
-        {reset ? (
-          <button
-            onClick={() => {
-              setMarket("all");
-              setType("all");
-              setStatus("all");
-            }}
-            className="text-ink-3 hover:text-ink self-end font-mono text-[11px] tracking-[0.08em] uppercase underline-offset-4 hover:underline"
-          >
-            Clear
-          </button>
-        ) : null}
-      </div>
+        <div className="mt-5 flex flex-wrap gap-x-8 gap-y-5">
+          <FilterGroup
+            label="Market"
+            value={market}
+            onChange={setMarket}
+            options={[{ value: "all", label: "All" }, ...markets.map((m) => ({ value: m, label: m }))]}
+          />
+          <FilterGroup
+            label="Type"
+            value={type}
+            onChange={(v) => setType(v as TypeFilter)}
+            options={[{ value: "all", label: "All" }, ...types.map((t) => ({ value: t, label: t }))]}
+          />
+          <FilterGroup
+            label="Status"
+            value={status}
+            onChange={(v) => setStatus(v as StatusFilter)}
+            options={[
+              { value: "all", label: "All" },
+              { value: "ready_to_move", label: "Ready" },
+              { value: "under_construction", label: "Under construction" },
+              { value: "new_launch", label: "New launch" },
+            ]}
+          />
+          {reset ? (
+            <button onClick={clear} className="text-cobalt hover:text-cobalt-deep self-end text-[13px] font-semibold">
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      </section>
 
       {/* ---- The ladder ---- */}
-      <div className="shiro shiro-soft mt-12">
-        <div className="flex flex-wrap items-baseline justify-between gap-3">
-          <span className="eyebrow">Price ladder</span>
-          <span className="text-ink-3 text-[11.5px]">
-            Each bar is one project&rsquo;s price band. Log scale — the range spans 60×.
-          </span>
+      <section className="bg-canvas rounded-card px-5 py-8 sm:px-8 sm:py-10">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <Chip>Price ladder</Chip>
+            <h2 className="text-ink mt-4 text-[26px] leading-tight font-medium tracking-[-0.025em] sm:text-[32px]">
+              Why ₹1.5 Cr and ₹2.5 Cr land on different projects
+            </h2>
+          </div>
+          <p className="text-ink-3 max-w-[40ch] text-[12.5px] leading-relaxed">
+            Each bar is one project&rsquo;s price band against one shared scale. Log scale — the range spans 60×.
+          </p>
         </div>
-      </div>
 
-      {/* Scale ticks */}
-      <div className="mt-6 hidden grid-cols-[220px_1fr] sm:grid" aria-hidden>
-        <div />
-        <div className="relative h-4 overflow-hidden">
-          {TICKS.map((t) => (
-            <span
-              key={t}
-              className="text-ink-3 absolute -translate-x-1/2 font-mono text-[10px]"
-              style={{ left: `${position(t)}%` }}
-            >
-              {formatInr(t)}
-            </span>
-          ))}
-        </div>
-      </div>
-
-      <ul className="mt-2">
-        {shown.map((p) => {
-          const left = position(p.priceMinInr);
-          const right = position(p.priceMaxInr);
-          return (
-            <li key={p.id} className="border-rule-2 border-b last:border-b-0">
-              <Link
-                href={`/projects/${p.id}`}
-                className="hover:bg-paper-2 group grid grid-cols-1 items-center gap-x-4 gap-y-2 rounded-sm px-1 py-3 transition-colors sm:grid-cols-[220px_1fr]"
-              >
-                <div className="min-w-0">
-                  <p className="text-ink group-hover:text-aqua truncate text-[14px] font-semibold transition-colors">
-                    {p.name.replace("Aarambh ", "")}
-                  </p>
-                  <p className="text-ink-3 truncate text-[11.5px]">
-                    {p.locality} · {STATUS_LABEL[p.status]}
-                  </p>
-                </div>
-
-                <div className="relative h-8 overflow-hidden">
-                  {/* Track */}
-                  <div className="bg-rule-2 absolute top-1/2 h-px w-full -translate-y-1/2" />
-                  {/* Band */}
-                  <div
-                    className="bg-aqua group-hover:bg-magenta absolute top-1/2 h-[5px] -translate-y-1/2 rounded-full transition-colors"
-                    style={{ left: `${left}%`, width: `${Math.max(1.2, right - left)}%` }}
-                  />
-                  {/* Past ~62% the label would run off the right edge and widen
-                      the page, so it flips to sit before the band end instead. */}
-                  {right > 62 ? (
-                    <span
-                      className="text-ink-2 absolute top-1/2 -translate-y-1/2 pr-2 text-right font-mono text-[10.5px] whitespace-nowrap"
-                      style={{ right: `${100 - left}%` }}
-                    >
-                      {p.priceRangeLabel}
-                    </span>
-                  ) : (
-                    <span
-                      className="text-ink-2 absolute top-1/2 -translate-y-1/2 pl-2 font-mono text-[10.5px] whitespace-nowrap"
-                      style={{ left: `${right}%` }}
-                    >
-                      {p.priceRangeLabel}
-                    </span>
-                  )}
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-
-      {shown.length === 0 ? (
-        <p className="text-ink-3 py-10 text-center text-[13.5px]">
-          Nothing matches those filters. <button onClick={() => { setMarket("all"); setType("all"); setStatus("all"); }} className="text-aqua underline underline-offset-4">Clear them</button>.
-        </p>
-      ) : null}
-
-      {/* ---- Cards ---- */}
-      <div className="shiro mt-16">
-        <span className="eyebrow">Every project</span>
-      </div>
-
-      <div className="mt-6 grid gap-x-8 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map((p) => (
-          <Link key={p.id} href={`/projects/${p.id}`} className="group shiro shiro-soft block">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="eyebrow">{p.locality}</span>
-              <span
-                className={cn(
-                  "shrink-0 rounded-full px-2 py-0.5 font-mono text-[9px] font-bold tracking-[0.08em] uppercase",
-                  p.status === "ready_to_move"
-                    ? "bg-aqua-wash text-aqua"
-                    : p.status === "new_launch"
-                      ? "bg-magenta-wash text-magenta"
-                      : "bg-paper-2 text-ink-3",
-                )}
-              >
-                {p.status === "ready_to_move" ? "Ready" : p.status === "new_launch" ? "New" : "U/C"}
-              </span>
-            </div>
-
-            <h3 className="font-display text-ink group-hover:text-aqua mt-2 text-[20px] leading-snug transition-colors">
-              {p.name.replace("Aarambh ", "")}
-            </h3>
-            <p className="text-ink-2 mt-2 line-clamp-2 text-[13px] leading-relaxed">{p.tagline}</p>
-
-            <p className="text-ink mt-3 font-mono text-[12.5px] font-semibold">{p.priceRangeLabel}</p>
-
-            <div className="mt-3 flex flex-wrap gap-1.5">
-              {Array.from(new Set(p.units.filter((u) => u.available).map((u) => u.configuration))).map((c) => (
-                <span key={c} className="border-rule text-ink-2 rounded-full border px-2 py-0.5 font-mono text-[10px]">
-                  {c}
+        <div className="bg-frost rounded-panel mt-8 p-3 sm:p-5">
+          {/* Scale ticks */}
+          <div className="hidden grid-cols-[230px_1fr] px-2 sm:grid" aria-hidden>
+            <div />
+            <div className="relative h-5 overflow-hidden">
+              {TICKS.map((t) => (
+                <span
+                  key={t}
+                  className="text-ink-3 absolute -translate-x-1/2 text-[11px] font-medium"
+                  style={{ left: `${position(t)}%` }}
+                >
+                  {formatInr(t)}
                 </span>
               ))}
             </div>
+          </div>
 
-            <p className="text-aqua mt-4 text-[12px] font-semibold">
-              Full details <span className="inline-block transition-transform group-hover:translate-x-0.5">→</span>
+          <ul className="mt-2 space-y-1.5">
+            {shown.map((p) => {
+              const left = position(p.priceMinInr);
+              const right = position(p.priceMaxInr);
+              return (
+                <li key={p.id}>
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className="group hover:shadow-soft grid grid-cols-1 items-center gap-x-4 gap-y-2 rounded-[14px] bg-white px-3 py-2.5 transition-shadow sm:grid-cols-[218px_1fr]"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-ink group-hover:text-cobalt truncate text-[14px] font-semibold transition-colors">
+                        {p.name.replace("Aarambh ", "")}
+                      </p>
+                      <p className="text-ink-3 truncate text-[11.5px]">
+                        {p.locality} · {STATUS_LABEL[p.status]}
+                      </p>
+                    </div>
+
+                    <div className="relative h-8 overflow-hidden">
+                      {/* Track */}
+                      <div className="bg-line-2 absolute top-1/2 h-[3px] w-full -translate-y-1/2 rounded-full" />
+                      {TICKS.map((t) => (
+                        <span
+                          key={t}
+                          className="bg-line absolute top-1/2 hidden h-3 w-px -translate-y-1/2 sm:block"
+                          style={{ left: `${position(t)}%` }}
+                          aria-hidden
+                        />
+                      ))}
+                      {/* Band */}
+                      <div
+                        className="bg-cobalt group-hover:bg-mid absolute top-1/2 h-[8px] -translate-y-1/2 rounded-full transition-colors"
+                        style={{ left: `${left}%`, width: `${Math.max(1.2, right - left)}%` }}
+                      />
+                      {/* Past ~62% the label would run off the right edge and widen
+                          the page, so it flips to sit before the band end instead. */}
+                      {right > 62 ? (
+                        <span
+                          className="text-ink-2 absolute top-1/2 -translate-y-1/2 pr-2 text-right text-[11.5px] font-medium whitespace-nowrap"
+                          style={{ right: `${100 - left}%` }}
+                        >
+                          {p.priceRangeLabel}
+                        </span>
+                      ) : (
+                        <span
+                          className="text-ink-2 absolute top-1/2 -translate-y-1/2 pl-2 text-[11.5px] font-medium whitespace-nowrap"
+                          style={{ left: `${right}%` }}
+                        >
+                          {p.priceRangeLabel}
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+
+          {shown.length === 0 ? (
+            <p className="text-ink-3 py-10 text-center text-[13.5px]">
+              Nothing matches those filters.{" "}
+              <button onClick={clear} className="text-cobalt font-semibold underline underline-offset-4">
+                Clear them
+              </button>
+              .
             </p>
-          </Link>
-        ))}
-      </div>
+          ) : null}
+        </div>
+      </section>
+
+      {/* ---- Cards ---- */}
+      <section className="bg-canvas rounded-card px-5 py-8 sm:px-8 sm:py-10">
+        <Chip>Every project</Chip>
+        <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {shown.map((p) => (
+            <ProjectCard key={p.id} project={p} />
+          ))}
+        </div>
+      </section>
     </div>
   );
 }
@@ -255,18 +240,18 @@ function FilterGroup({
 }) {
   return (
     <div>
-      <span className="eyebrow">{label}</span>
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <span className="label">{label}</span>
+      <div className="bg-frost mt-2 flex flex-wrap gap-1 rounded-[20px] p-1">
         {options.map((o) => (
           <button
             key={o.value}
             onClick={() => onChange(o.value)}
             aria-pressed={value === o.value}
             className={cn(
-              "min-h-9 rounded-full border px-3 text-[12px] font-medium capitalize transition-colors",
+              "min-h-9 rounded-full px-3.5 text-[12.5px] font-semibold capitalize transition-colors",
               value === o.value
-                ? "bg-ink text-paper border-ink"
-                : "border-rule text-ink-2 hover:border-ink hover:text-ink",
+                ? "text-cobalt bg-white shadow-[0_4px_12px_-6px_rgb(19_40_110/0.35)]"
+                : "text-ink-2 hover:text-ink",
             )}
           >
             {o.label}

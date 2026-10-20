@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AudioLines, Bug, Layers, Network, PhoneCall, Rocket, Sparkles, TriangleAlert, Wrench } from "lucide-react";
+import { Reveal } from "@/components/Reveal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SignalPath } from "@/components/SignalPath";
+import { Chip, btn } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { AGENT_FUNCTION_DECLARATIONS } from "@/lib/agent-tools";
 import { PROJECTS, operatingMarkets } from "@/lib/projects";
 
@@ -64,24 +69,48 @@ const NEXT_VERSION = [
 
 export default function HowItWorksPage() {
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="mx-auto flex min-h-dvh max-w-[1440px] flex-col gap-3 p-2 sm:p-3 lg:p-4">
       <SiteHeader current="/how-it-works" />
 
-      <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 pb-24 sm:px-8">
-        <div className="shiro mt-10">
-          <p className="eyebrow">Architecture</p>
-          <h1 className="font-display text-ink mt-3 max-w-[22ch] text-[34px] leading-[1.12] sm:text-[46px]">
-            How a phone call becomes a scored lead.
-          </h1>
-        </div>
+      <main className="flex flex-1 flex-col gap-3">
+        <section className="bg-canvas rounded-card p-2.5 sm:p-4">
+          <div className="wash rounded-[22px] px-5 py-12 sm:px-10 sm:py-16">
+            <Chip tone="white" icon={<Network className="h-3.5 w-3.5" />}>
+              Architecture
+            </Chip>
+            <h1 className="text-ink mt-5 max-w-[20ch] text-[38px] leading-[1.06] font-medium tracking-[-0.035em] sm:text-[54px]">
+              How a phone call becomes a scored lead
+            </h1>
+            <dl className="mt-10 grid max-w-[880px] grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { k: "Projects in the catalogue", v: String(PROJECTS.length) },
+                { k: "Markets covered", v: String(operatingMarkets().length) },
+                { k: "Agent tools", v: String(AGENT_FUNCTION_DECLARATIONS.length) },
+                { k: "Unit tests", v: "42" },
+              ].map((s2, i) => (
+                <div key={s2.k} className={cn("rounded-[20px] px-5 py-5", i === 0 ? "bg-cobalt text-white" : "bg-white")}>
+                  <dt className={cn("text-[12px] font-medium", i === 0 ? "text-white/75" : "text-ink-3")}>{s2.k}</dt>
+                  <dd className={cn("tnum mt-2 text-[32px] leading-none font-medium tracking-[-0.03em]", i === 0 ? "text-white" : "text-ink")}>
+                    {s2.v}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </div>
+        </section>
 
         {/* ---------------- Signal path ---------------- */}
-        <section className="mt-14">
-          <div className="shiro">
-            <span className="eyebrow">Signal path</span>
-            <p className="text-ink-2 mt-3 max-w-[70ch] text-[14px] leading-relaxed">
-              Two transports, one agent. The browser and the phone differ only in how audio gets in and out — the
-              prompt, the tools and the executor behind them are the same code.
+        <section className="bg-canvas rounded-card px-5 py-10 sm:px-8 sm:py-12">
+          <div className="grid gap-5 lg:grid-cols-2 lg:items-end">
+            <div>
+              <Chip icon={<AudioLines className="h-3.5 w-3.5" />}>Signal path</Chip>
+              <h2 className="text-ink mt-4 text-[28px] leading-tight font-medium tracking-[-0.025em] sm:text-[34px]">
+                Two transports, one agent
+              </h2>
+            </div>
+            <p className="text-ink-2 max-w-[60ch] text-[14px] leading-relaxed lg:justify-self-end">
+              The browser and the phone differ only in how audio gets in and out — the prompt, the tools and the
+              executor behind them are the same code.
             </p>
           </div>
           <div className="mt-8">
@@ -90,11 +119,9 @@ export default function HowItWorksPage() {
         </section>
 
         {/* ---------------- Key decisions ---------------- */}
-        <section className="mt-20">
-          <div className="shiro">
-            <span className="eyebrow">Three decisions that shaped everything</span>
-          </div>
-          <div className="mt-6 grid gap-8 sm:grid-cols-3">
+        <section className="bg-canvas rounded-card px-5 py-10 sm:px-8 sm:py-12">
+          <Chip icon={<Sparkles className="h-3.5 w-3.5" />}>Three decisions that shaped everything</Chip>
+          <div className="mt-8 grid gap-3 lg:grid-cols-3">
             {[
               {
                 n: "Native speech-to-speech, not a pipeline",
@@ -109,46 +136,28 @@ export default function HowItWorksPage() {
                 b: "The agent calls update_lead_requirements the moment she learns anything, so the CRM fills in while she is still talking and a dropped call still leaves a partial lead. The post-call model reconciles rather than extracts from scratch — and tool-captured fields always win.",
               },
             ].map((d, i) => (
-              <div key={d.n} className="shiro shiro-soft">
-                <span className="text-aqua font-mono text-[11px] font-bold">{String(i + 1).padStart(2, "0")}</span>
-                <h3 className="text-ink mt-1.5 text-[15px] leading-snug font-semibold">{d.n}</h3>
-                <p className="text-ink-2 mt-2.5 text-[13.5px] leading-[1.65]">{d.b}</p>
-              </div>
+              <Reveal key={d.n} delay={i * 110} className={cn("rounded-[22px] p-6", i === 1 ? "bg-cobalt text-white" : "wash-soft")}>
+                <span className={cn("font-mono text-[12px] font-semibold", i === 1 ? "text-white/70" : "text-cobalt")}>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <h3 className={cn("mt-3 text-[18px] leading-snug font-semibold tracking-[-0.015em]", i === 1 ? "text-white" : "text-ink")}>
+                  {d.n}
+                </h3>
+                <p className={cn("mt-3 text-[13.5px] leading-[1.7]", i === 1 ? "text-white/80" : "text-ink-2")}>{d.b}</p>
+              </Reveal>
             ))}
           </div>
-        </section>
-
-        {/* ---------------- Scale ---------------- */}
-        <section className="mt-20">
-          <div className="shiro">
-            <span className="eyebrow">By the numbers</span>
-          </div>
-          <dl className="mt-6 grid grid-cols-2 gap-x-8 gap-y-6 sm:grid-cols-4">
-            {[
-              { k: "Projects in the catalogue", v: String(PROJECTS.length) },
-              { k: "Markets covered", v: String(operatingMarkets().length) },
-              { k: "Agent tools", v: String(AGENT_FUNCTION_DECLARATIONS.length) },
-              { k: "Unit tests", v: "42" },
-            ].map((s2) => (
-              <div key={s2.k} className="shiro shiro-soft">
-                <dt className="eyebrow">{s2.k}</dt>
-                <dd className="font-display text-ink tnum mt-1.5 text-[30px] leading-none">{s2.v}</dd>
-              </div>
-            ))}
-          </dl>
         </section>
 
         {/* ---------------- Stack ---------------- */}
-        <section className="mt-20">
-          <div className="shiro">
-            <span className="eyebrow">Stack</span>
-          </div>
-          <div className="mt-5 overflow-x-auto">
-            <table className="w-full min-w-[720px] border-collapse text-left">
+        <section className="bg-canvas rounded-card px-5 py-10 sm:px-8 sm:py-12">
+          <Chip icon={<Layers className="h-3.5 w-3.5" />}>Stack</Chip>
+          <div className="bg-frost rounded-panel mt-6 overflow-x-auto p-2">
+            <table className="w-full min-w-[720px] border-separate border-spacing-y-1.5 text-left">
               <thead>
-                <tr className="border-ink border-b">
+                <tr>
                   {["Layer", "Choice", "Why"].map((h) => (
-                    <th key={h} className="eyebrow pb-2 font-normal">
+                    <th key={h} className="text-ink-3 px-4 pb-1 text-[12px] font-medium">
                       {h}
                     </th>
                   ))}
@@ -156,12 +165,10 @@ export default function HowItWorksPage() {
               </thead>
               <tbody>
                 {STACK.map((r) => (
-                  <tr key={r.layer} className="border-rule-2 border-b">
-                    <td className="text-ink w-[110px] py-3 pr-4 align-top text-[13px] font-semibold">{r.layer}</td>
-                    <td className="text-ink-2 w-[300px] py-3 pr-4 align-top font-mono text-[12px] leading-relaxed">
-                      {r.choice}
-                    </td>
-                    <td className="text-ink-2 py-3 align-top text-[13px] leading-relaxed">{r.why}</td>
+                  <tr key={r.layer} className="bg-white">
+                    <td className="text-ink w-[120px] rounded-l-[12px] px-4 py-3.5 align-top text-[13.5px] font-semibold">{r.layer}</td>
+                    <td className="text-navy w-[320px] px-4 py-3.5 align-top font-mono text-[12px] leading-relaxed">{r.choice}</td>
+                    <td className="text-ink-2 rounded-r-[12px] px-4 py-3.5 align-top text-[13px] leading-relaxed">{r.why}</td>
                   </tr>
                 ))}
               </tbody>
@@ -170,50 +177,50 @@ export default function HowItWorksPage() {
         </section>
 
         {/* ---------------- Tools ---------------- */}
-        <section className="mt-20">
-          <div className="shiro">
-            <span className="eyebrow">The agent&rsquo;s tools</span>
-            <p className="text-ink-2 mt-3 max-w-[70ch] text-[14px] leading-relaxed">
-              Declared once and shared by both the browser client and the telephony bridge. The executor is pure — it
-              touches no network — because a database round-trip inside a tool call is audible on a voice call as a
-              stall. Persistence happens on a separate timer.
+        <section className="bg-canvas rounded-card px-5 py-10 sm:px-8 sm:py-12">
+          <div className="grid gap-5 lg:grid-cols-2 lg:items-end">
+            <div>
+              <Chip icon={<Wrench className="h-3.5 w-3.5" />}>The agent&rsquo;s tools</Chip>
+              <h2 className="text-ink mt-4 text-[28px] leading-tight font-medium tracking-[-0.025em] sm:text-[34px]">
+                Declared once, shared by both transports
+              </h2>
+            </div>
+            <p className="text-ink-2 max-w-[60ch] text-[14px] leading-relaxed lg:justify-self-end">
+              The executor is pure — it touches no network — because a database round-trip inside a tool call is audible
+              on a voice call as a stall. Persistence happens on a separate timer.
             </p>
           </div>
-          <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {AGENT_FUNCTION_DECLARATIONS.map((t) => (
-              <div key={t.name} className="shiro shiro-soft">
-                <code className="text-aqua font-mono text-[12.5px] font-semibold">{t.name}</code>
-                <p className="text-ink-2 mt-2 text-[12.5px] leading-[1.6]">{t.description}</p>
+              <div key={t.name} className="bg-frost rounded-[20px] p-5">
+                <code className="text-cobalt rounded-md bg-white px-2 py-1 font-mono text-[12px] font-semibold">{t.name}</code>
+                <p className="text-ink-2 mt-3 text-[12.5px] leading-[1.6]">{t.description}</p>
               </div>
             ))}
           </div>
         </section>
 
         {/* ---------------- Challenges ---------------- */}
-        <section className="mt-20">
-          <div className="shiro">
-            <span className="eyebrow">What went wrong on the way</span>
-            <h2 className="font-display text-ink mt-3 text-[28px] leading-tight">
-              Six problems that were not in any documentation.
-            </h2>
-          </div>
-          <div className="mt-8 grid gap-x-12 gap-y-9 lg:grid-cols-2">
-            {CHALLENGES.map((c) => (
-              <div key={c.title} className="shiro shiro-soft">
-                <h3 className="text-ink text-[14.5px] leading-snug font-semibold">{c.title}</h3>
-                <p className="text-ink-2 mt-2.5 text-[13.5px] leading-[1.7]">{c.body}</p>
-              </div>
+        <section className="bg-canvas rounded-card px-5 py-10 sm:px-8 sm:py-12">
+          <Chip icon={<Bug className="h-3.5 w-3.5" />}>What went wrong on the way</Chip>
+          <h2 className="text-ink mt-4 text-[28px] leading-tight font-medium tracking-[-0.025em] sm:text-[34px]">
+            Problems that were not in any documentation
+          </h2>
+          <div className="mt-8 grid gap-3 lg:grid-cols-2">
+            {CHALLENGES.map((c, i) => (
+              <Reveal key={c.title} delay={(i % 2) * 100} className="wash-soft rounded-[22px] p-6">
+                <h3 className="text-ink text-[15.5px] leading-snug font-semibold">{c.title}</h3>
+                <p className="text-ink-2 mt-3 text-[13.5px] leading-[1.7]">{c.body}</p>
+              </Reveal>
             ))}
           </div>
         </section>
 
         {/* ---------------- Limits + next ---------------- */}
-        <section className="mt-20 grid gap-12 lg:grid-cols-2 lg:gap-20">
-          <div>
-            <div className="shiro">
-              <span className="eyebrow">Known limitations</span>
-            </div>
-            <ul className="text-ink-2 mt-5 space-y-2.5 text-[13.5px] leading-relaxed">
+        <section className="grid gap-3 lg:grid-cols-2">
+          <div className="bg-canvas rounded-card px-5 py-10 sm:px-8">
+            <Chip icon={<TriangleAlert className="h-3.5 w-3.5" />}>Known limitations</Chip>
+            <ul className="mt-6 space-y-2">
               {[
                 "Free-tier rate limits apply. Sustained concurrent calls will hit them.",
                 "Site visits, WhatsApp messages and callbacks are recorded on the lead, not actually dispatched.",
@@ -223,19 +230,19 @@ export default function HowItWorksPage() {
                 "Heavy accents and very noisy lines still degrade recognition; she asks the caller to repeat rather than guessing.",
                 "Only the browser demo is deployed serverless; the phone bridge needs a long-lived process.",
               ].map((l) => (
-                <li key={l} className="border-rule border-l-2 pl-3">
+                <li key={l} className="bg-frost text-ink-2 rounded-[14px] px-4 py-3 text-[13.5px] leading-relaxed">
                   {l}
                 </li>
               ))}
             </ul>
           </div>
-          <div>
-            <div className="shiro">
-              <span className="eyebrow">Next version</span>
-            </div>
-            <ul className="text-ink-2 mt-5 space-y-2.5 text-[13.5px] leading-relaxed">
+          <div className="bg-cobalt rounded-card px-5 py-10 text-white sm:px-8">
+            <Chip tone="glass" icon={<Rocket className="h-3.5 w-3.5" />}>
+              Next version
+            </Chip>
+            <ul className="mt-6 space-y-2">
               {NEXT_VERSION.map((l) => (
-                <li key={l} className="border-aqua/30 border-l-2 pl-3">
+                <li key={l} className="rounded-[14px] bg-white/12 px-4 py-3 text-[13.5px] leading-relaxed text-white/90">
                   {l}
                 </li>
               ))}
@@ -243,15 +250,18 @@ export default function HowItWorksPage() {
           </div>
         </section>
 
-        <div className="border-rule mt-20 border-t pt-10 text-center">
-          <Link
-            href="/call"
-            className="bg-ink text-paper hover:bg-aqua inline-flex min-h-12 items-center rounded-sm px-6 text-[14.5px] font-semibold transition-colors"
-          >
-            Try it yourself
-          </Link>
-        </div>
+        <section className="bg-canvas rounded-card p-2.5 sm:p-4">
+          <div className="wash rounded-[22px] px-6 py-14 text-center">
+            <h2 className="text-ink text-[28px] font-medium tracking-[-0.03em] sm:text-[36px]">Hear it for yourself.</h2>
+            <Link href="/call" className={cn(btn("primary", "lg"), "mt-7")}>
+              <PhoneCall className="h-4 w-4" aria-hidden />
+              Try it yourself
+            </Link>
+          </div>
+        </section>
       </main>
+
+      <SiteFooter />
     </div>
   );
 }

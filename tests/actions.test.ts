@@ -9,7 +9,7 @@
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { calendarInviteProvider, crmWebhookProvider } from "../src/lib/actions/providers";
+import { calendarInviteProvider, crmWebhookProvider, whatsappProvider } from "../src/lib/actions/providers";
 import { idempotencyKeyFor, runPostCallActions } from "../src/lib/actions/runner";
 import type { ActionProvider } from "../src/lib/actions/types";
 import type { CallRecord } from "../src/lib/types";
@@ -209,5 +209,82 @@ describe("crm webhook", () => {
   it("does not fire for a call with no way to reach the lead", () => {
     const anonymous = call({ requirements: {}, fromNumber: undefined });
     assert.equal(crmWebhookProvider.shouldRun({ call: anonymous, idempotencyKey: "k" }), false);
+  });
+});
+
+describe("whatsapp recap", () => {
+  /** Runs the provider against a stubbed Graph API and restores the globals. */
+  async function withGraph(
+    env: Record<string, string | undefined>,
+    respond: (body: unknown) => Response,
+    body?: (sent: unknown) => void,
+  ) {
+    const keys = ["WHATSAPP_TOKEN", "WHATSAPP_PHONE_ID", "WHATSAPP_TEMPLATE_NAME"] as const;
+    const had = Object.fromEntries(keys.map((k) => [k, process.env[k]]));
+    const realFetch = globalThis.fetch;
+    for (const k of keys) {
+      if (env[k] === undefined) delete process.env[k];
+      else process.env[k] = env[k];
+    }
+    globalThis.fetch = (async (_url: string, init: RequestInit) => {
+      const sent = JSON.parse(String(init.body));
+      body?.(sent);
+      return respond(sent);
+    }) as typeof fetch;
+    try {
+      return await whatsappProvider.run({ call: call(), idempotencyKey: "k" });
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const k of keys) {
+        if (had[k] === undefined) delete process.env[k];
+        else process.env[k] = had[k]!;
+      }
+    }
+  }
+
+  const ok = () => new Response(JSON.stringify({ messages: [{ id: "wamid.1" }] }), { status: 200 });
+
+  it("explains a closed 24-hour window instead of reporting a bare 400", async () => {
+    // The failure every real deployment hits first: a business cannot open the
+    // window by phoning someone, so free-form text is always refused.
+    const r = await withGraph(
+      { WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p", WHATSAPP_TEMPLATE_NAME: undefined },
+      () =>
+        new Response(JSON.stringify({ error: { code: 131047, message: "Re-engagement message" } }), { status: 400 }),
+    );
+    assert.equal(r.status, "failed");
+    assert.match(r.detail, /24-hour window/);
+    assert.match(r.detail, /WHATSAPP_TEMPLATE_NAME/);
+  });
+
+  it("sends a template when one is configured, because that is what survives the window", async () => {
+    let sent: Record<string, unknown> = {};
+    const r = await withGraph(
+      { WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p", WHATSAPP_TEMPLATE_NAME: "aarambh_recap" },
+      ok,
+      (s) => (sent = s as Record<string, unknown>),
+    );
+    assert.equal(r.status, "sent");
+    assert.equal(sent.type, "template");
+    assert.equal((sent.template as Record<string, unknown>).name, "aarambh_recap");
+  });
+
+  it("surfaces the Graph error code so a bad token is distinguishable from a bad template", async () => {
+    const r = await withGraph(
+      { WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p", WHATSAPP_TEMPLATE_NAME: "nope" },
+      () =>
+        new Response(JSON.stringify({ error: { code: 132001, message: "Template name does not exist" } }), {
+          status: 400,
+        }),
+    );
+    assert.equal(r.status, "failed");
+    assert.match(r.detail, /132001/);
+    assert.match(r.detail, /Template name does not exist/);
+  });
+
+  it("strips the leading + that the Graph API rejects", async () => {
+    let sent: Record<string, unknown> = {};
+    await withGraph({ WHATSAPP_TOKEN: "t", WHATSAPP_PHONE_ID: "p" }, ok, (s) => (sent = s as Record<string, unknown>));
+    assert.equal(sent.to, "919810012345");
   });
 });

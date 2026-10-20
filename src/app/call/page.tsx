@@ -9,9 +9,9 @@ export const metadata: Metadata = {
 
 export default function CallPage() {
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="mx-auto flex min-h-dvh max-w-[1440px] flex-col gap-3 p-2 sm:p-3 lg:p-4">
       <SiteHeader current="/call" />
-      <main className="flex-1 pb-16">
+      <main className="flex-1">
         <CallConsole />
       </main>
     </div>

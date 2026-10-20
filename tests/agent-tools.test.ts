@@ -187,6 +187,56 @@ describe("end_call", () => {
     const r = executeAgentTool("end_call", { outcome: "site_visit_booked", reason: "Booked for Saturday" });
     assert.equal(r.endCall?.outcome, "site_visit_booked");
   });
+
+  it("keeps the callback time the caller named", () => {
+    const r = executeAgentTool("end_call", {
+      outcome: "callback_requested",
+      reason: "Wants the pricing sheet first",
+      callbackTime: "Friday shaam",
+    });
+    assert.equal(r.requirementsPatch?.callbackPreference, "Friday shaam");
+  });
+
+  it("ignores a callback time on an outcome that is not a callback", () => {
+    // Nobody was asked for a time on a wrong number, so anything here is invented.
+    const r = executeAgentTool("end_call", { outcome: "wrong_number", callbackTime: "tomorrow" });
+    assert.equal(r.requirementsPatch?.callbackPreference, undefined);
+  });
+});
+
+describe("callback capture", () => {
+  it("carries the time through a handoff so a human knows when to ring", () => {
+    const r = executeAgentTool("transfer_to_human", {
+      reason: "Wants a discount",
+      urgency: "callback",
+      callbackTime: "kal 11 baje",
+    });
+    assert.equal(r.handoff?.preferredTime, "kal 11 baje");
+    assert.equal(r.requirementsPatch?.callbackPreference, "kal 11 baje");
+  });
+
+  it("does not attach a time to an immediate transfer", () => {
+    const r = executeAgentTool("transfer_to_human", {
+      reason: "Asked for a manager now",
+      urgency: "now",
+      callbackTime: "Friday",
+    });
+    assert.equal(r.handoff?.preferredTime, undefined);
+  });
+
+  it("drops a placeholder rather than filing it as a callback window", () => {
+    // Models fill optional string fields with these instead of omitting them,
+    // and "unknown" in the callback column reads as a failed parse.
+    for (const junk of ["unknown", "N/A", "not specified", "   "]) {
+      const r = executeAgentTool("transfer_to_human", { reason: "x", urgency: "callback", callbackTime: junk });
+      assert.equal(r.handoff?.preferredTime, undefined, `expected ${JSON.stringify(junk)} to be dropped`);
+    }
+  });
+
+  it("asks for a time when none was given, instead of promising a vague call back", () => {
+    const r = executeAgentTool("transfer_to_human", { reason: "Wants a discount", urgency: "callback" });
+    assert.match(String((r.response as Record<string, unknown>).guidance), /when suits them/);
+  });
 });
 
 describe("unknown tools", () => {
