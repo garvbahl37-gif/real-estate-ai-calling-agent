@@ -34,6 +34,24 @@ const browser = await chromium.launch({
 const ctx = await browser.newContext({ permissions: ["microphone"] });
 const page = await ctx.newPage();
 
+// Chrome's fake microphone plays a continuous tone, which the model hears as a
+// caller speaking and answers — invented turns that derail the scripted
+// conversation. Every caller turn here is typed, so the mic should be silent.
+await page.addInitScript(() => {
+  const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async (constraints) => {
+    if (!constraints?.audio) return real(constraints);
+    const ac = new AudioContext();
+    const osc = ac.createOscillator();
+    const mute = ac.createGain();
+    mute.gain.value = 0;
+    const out = ac.createMediaStreamDestination();
+    osc.connect(mute).connect(out);
+    osc.start();
+    return out.stream;
+  };
+});
+
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 page.on("console", (m) => m.type() === "error" && errors.push(m.text()));

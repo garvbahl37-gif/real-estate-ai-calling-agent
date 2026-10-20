@@ -2,12 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, AudioLines, Lightbulb, PhoneCall, Sparkles, Wrench } from "lucide-react";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { RetrySummary } from "@/components/RetrySummary";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { Transcript } from "@/components/Transcript";
 import { Avatar, BandPill, Card, Chip, Meter, Panel, Ring, btn } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { leadFields } from "@/lib/lead-fields";
+import { leadFields, realSummary, summaryFailed, summaryFailureReason } from "@/lib/lead-fields";
 import { redactCall } from "@/lib/redact";
 import { getCall } from "@/lib/store";
 
@@ -33,7 +34,11 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
   const call = redactCall(stored);
 
   const req = call.summary?.requirements ?? call.requirements;
-  const s = call.summary;
+  // A failed summarisation stores a placeholder scored 0 / cold. Treat it as no
+  // summary — and offer to try again — rather than as a real cold lead.
+  const s = realSummary(call.summary);
+  const failed = summaryFailed(call.summary);
+  const failure = summaryFailureReason(call.summary);
   const started = new Date(call.startedAt);
   const live = isLive(call);
   const fields = leadFields(req);
@@ -166,6 +171,18 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
             </Panel>
           </div>
         </Card>
+      ) : failed ? (
+        <Card className="px-5 py-7 sm:px-8">
+          <Chip icon={<Sparkles className="h-3.5 w-3.5" />}>Call summary</Chip>
+          <h2 className="text-ink mt-4 text-[22px] leading-snug font-medium tracking-[-0.02em]">
+            The summary could not be generated
+          </h2>
+          <p className="text-ink-2 mt-2 max-w-[68ch] text-[14px] leading-relaxed">
+            {failure ?? "The summariser returned an error."} The transcript and everything Priya captured during the call
+            are saved and shown below — only the written summary and the score are missing.
+          </p>
+          <RetrySummary callId={call.id} className="mt-5" />
+        </Card>
       ) : (
         <Card className="text-ink-3 px-5 py-6 text-[13.5px] sm:px-8">
           {live
@@ -173,6 +190,7 @@ export default async function LeadDetail({ params }: { params: Promise<{ id: str
             : call.status === "in_progress"
               ? "This call never finished, so no summary was generated."
               : "No summary was generated for this call."}
+          {!live && call.transcript.length ? <RetrySummary callId={call.id} className="mt-4" /> : null}
         </Card>
       )}
 

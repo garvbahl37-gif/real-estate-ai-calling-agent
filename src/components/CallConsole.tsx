@@ -21,7 +21,9 @@ import {
 import { LeadPanel } from "@/components/LeadPanel";
 import { Shirorekha } from "@/components/Shirorekha";
 import { Transcript } from "@/components/Transcript";
+import { RetrySummary } from "@/components/RetrySummary";
 import { BandPill, Card, Chip, Panel, PriyaAvatar, Ring, btn } from "@/components/ui";
+import { summaryFailed, summaryFailureReason } from "@/lib/lead-fields";
 import { DEFAULT_VOICE, VOICES } from "@/lib/agent-prompt";
 import { DEFAULT_LIVE_MODEL } from "@/lib/models";
 import { LiveCall, type CallState } from "@/lib/live-session";
@@ -577,7 +579,18 @@ export function CallConsole() {
             {summarising ? <span className="text-amber text-[12px] font-semibold">Generating…</span> : null}
           </div>
 
-          {summary ? (
+          {summary && summaryFailed(summary) ? (
+            <div className="rise-in mt-6">
+              <h2 className="text-ink text-[22px] leading-snug font-medium tracking-[-0.02em]">
+                The summary could not be generated
+              </h2>
+              <p className="text-ink-2 mt-2 max-w-[68ch] text-[14px] leading-relaxed">
+                {summaryFailureReason(summary) ?? "The summariser returned an error."} The transcript and the lead
+                record above are saved — only the written summary and the score are missing.
+              </p>
+              {callId ? <RetrySummary callId={callId} className="mt-5" onSummary={setSummary} /> : null}
+            </div>
+          ) : summary ? (
             <div className="rise-in mt-6 grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
               <div>
                 <h2 className="text-ink text-[26px] leading-snug font-medium tracking-[-0.025em] sm:text-[30px]">

@@ -20,6 +20,19 @@ const SCRIPT = [
 const b = await chromium.launch({ headless: true, args:["--use-fake-ui-for-media-stream","--use-fake-device-for-media-capture","--autoplay-policy=no-user-gesture-required"] });
 const ctx = await b.newContext({ permissions:["microphone"] });
 const p = await ctx.newPage();
+// Chrome's fake microphone plays a tone the model hears as a caller speaking;
+// every caller turn here is typed, so give the page a silent microphone.
+await p.addInitScript(() => {
+  const real = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+  navigator.mediaDevices.getUserMedia = async (c) => {
+    if (!c?.audio) return real(c);
+    const ac = new AudioContext(), osc = ac.createOscillator(), mute = ac.createGain(), out = ac.createMediaStreamDestination();
+    mute.gain.value = 0;
+    osc.connect(mute).connect(out);
+    osc.start();
+    return out.stream;
+  };
+});
 const errs = []; p.on("pageerror", e=>errs.push(e.message)); p.on("console", m=>m.type()==="error"&&errs.push(m.text()));
 await p.goto(BASE+"/call",{waitUntil:"networkidle"});
 // Select ENGLISH opening language.

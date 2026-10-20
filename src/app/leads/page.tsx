@@ -8,7 +8,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { VisitBoard } from "@/components/VisitBoard";
 import { Avatar, Card, EmptyNote, Meter, Panel, btn } from "@/components/ui";
 import { cn } from "@/lib/cn";
-import { budgetLabel, captureProgress } from "@/lib/lead-fields";
+import { budgetLabel, captureProgress, realSummary } from "@/lib/lead-fields";
 import { leadLocation } from "@/lib/presentation";
 import { redactCall } from "@/lib/redact";
 import { listCalls, storageBackend } from "@/lib/store";
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 type BandFilter = "all" | "hot" | "warm" | "cold" | "unscored";
 
 function band(call: CallRecord) {
-  return call.summary?.qualification.band ?? null;
+  return realSummary(call.summary)?.qualification.band ?? null;
 }
 
 function reqOf(call: CallRecord) {
@@ -70,7 +70,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
   const now = requestTime();
   const today = istDay(now);
   const callsToday = calls.filter((c) => istDay(c.startedAt) === today).length;
-  const scored = calls.filter((c) => c.summary);
+  const scored = calls.filter((c) => realSummary(c.summary));
   const counts = {
     hot: calls.filter((c) => band(c) === "hot").length,
     warm: calls.filter((c) => band(c) === "warm").length,
@@ -88,7 +88,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Promis
 
   const shown = calls.filter((c) => {
     if (filter === "all") return true;
-    if (filter === "unscored") return !c.summary;
+    if (filter === "unscored") return !realSummary(c.summary);
     return band(c) === filter;
   });
 
@@ -445,7 +445,7 @@ function LeadRow({ call: c, live }: { call: CallRecord; live: boolean }) {
         </div>
         <div className="shrink-0 text-right">
           <p className={cn("tnum text-[15px] font-semibold", b === "hot" ? "text-cobalt" : "text-ink")}>
-            {c.summary ? c.summary.qualification.score : "—"}
+            {realSummary(c.summary)?.qualification.score ?? "—"}
           </p>
           <p className={cn("text-[11px] capitalize", live ? "text-cobalt font-semibold" : "text-ink-3")}>
             {b ?? (live ? "live" : "not scored")}

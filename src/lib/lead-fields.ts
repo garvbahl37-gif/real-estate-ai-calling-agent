@@ -1,5 +1,33 @@
 import { formatInr, getProject } from "./projects";
-import type { LeadRequirements } from "./types";
+import type { CallSummary, LeadRequirements } from "./types";
+
+/**
+ * True when the summariser gave up — a model outage or spent quota — and
+ * stored its placeholder instead of a summary. That placeholder carries a
+ * score of 0 and a band of "cold" so the record stays well-formed, but showing
+ * it as a cold lead is wrong: nobody scored it. It marks itself with this
+ * reasoning line (summarize.ts, FALLBACK).
+ */
+export function summaryFailed(s: CallSummary | undefined): boolean {
+  return Boolean(s && s.qualification.reasoning.startsWith("Not scored"));
+}
+
+/** The summary if there really is one; a failed attempt counts as none. */
+export function realSummary(s: CallSummary | undefined): CallSummary | undefined {
+  return s && !summaryFailed(s) ? s : undefined;
+}
+
+/**
+ * The upstream error out of a failed summary, readable: "gemini-3.5-flash: model
+ * overloaded" rather than a JSON blob, or undefined when it says nothing useful.
+ */
+export function summaryFailureReason(s: CallSummary | undefined): string | undefined {
+  if (!s || !summaryFailed(s)) return undefined;
+  if (/high demand|UNAVAILABLE|503|overloaded/i.test(s.summary)) return "Google's summary model was overloaded at the time.";
+  if (/quota|429|RESOURCE_EXHAUSTED/i.test(s.summary)) return "The free-tier quota for the summary model was used up.";
+  if (/not configured/i.test(s.summary)) return "No Gemini key is configured on the server.";
+  return undefined;
+}
 
 /**
  * The lead record as the UI shows it: one labelled row per thing Priya can
