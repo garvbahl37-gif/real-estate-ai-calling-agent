@@ -17,7 +17,10 @@ export interface Photo {
 }
 
 export const PHOTOS = {
-  buyerAtHome: { src: "/images/buyer-at-home.jpg", alt: "A buyer smiling at her phone on a sofa at home" },
+  heroTower: {
+    src: "/images/hero-tower-dusk.jpg",
+    alt: "Representative image: the glass-and-louvre facade of a residential tower against an evening sky",
+  },
   tower: { src: "/images/exterior-tower.jpg", alt: "Representative image: a white apartment tower with balconies" },
   tower2: { src: "/images/exterior-tower2.jpg", alt: "Representative image: a modern apartment block with dark window frames" },
   tower3: { src: "/images/exterior-tower3.jpg", alt: "Representative image: an apartment building with timber-clad upper floors" },

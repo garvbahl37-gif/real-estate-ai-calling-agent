@@ -8,20 +8,18 @@ import type { Project, UnitOption } from "@/lib/types";
 import { Mark, PriyaAvatar, Ring } from "@/components/ui";
 
 /**
- * The catalogue hero, after the Nixtio real-estate shot: a buyer on her phone
- * at home, the project name huge over the room, a completion ring wired to
- * her phone by a dotted line, and the unit types floating over the sofa.
- *
- * The line is the point — what she is looking at on that phone is this
- * project, and the cards are what Priya would tell her on a call.
+ * The catalogue hero, after the Nixtio real-estate shot: the project name huge
+ * over an evening sky, a residential tower beside it, a completion ring wired
+ * by a dotted line to one of its homes, and the unit types floating over the
+ * lower floors — the cards are what Priya would tell a buyer on a call.
  *
  * Positions are percentages of a fixed 16:9 frame on large screens, so the
- * line lands on the handset whatever the width. Below that the cards drop out
- * of the photo into a scroller.
+ * line lands on the same balcony whatever the width. Below that the cards drop
+ * out of the photo into a scroller.
  */
 
-/** Where the handset sits in buyer-at-home.jpg, as a share of the frame. */
-const PHONE = { x: 53.6, y: 67 };
+/** The glazed corner balcony in hero-tower-dusk.jpg the line ends on, as a share of the frame. */
+const HOME = { x: 53.4, y: 66.5 };
 const RING = { x: 80, y: 30 };
 
 export function ProjectHero({ project: p, backHref = "/projects", backLabel = "All projects" }: { project: Project; backHref?: string; backLabel?: string }) {
@@ -50,16 +48,16 @@ export function ProjectHero({ project: p, backHref = "/projects", backLabel = "A
 
   return (
     <section className="bg-canvas rounded-card overflow-hidden p-2.5 sm:p-3">
-      <div className="relative isolate min-h-[560px] overflow-hidden rounded-[22px] bg-[#c9c3bb] xl:aspect-[16/9] xl:min-h-0">
+      <div className="relative isolate min-h-[560px] overflow-hidden rounded-[22px] bg-[#1d2b4f] xl:aspect-[16/9] xl:min-h-0">
         <Image
-          src={PHOTOS.buyerAtHome.src}
-          alt={PHOTOS.buyerAtHome.alt}
+          src={PHOTOS.heroTower.src}
+          alt={PHOTOS.heroTower.alt}
           fill
           priority
           sizes="(min-width: 1440px) 1400px, 100vw"
-          className="object-cover object-[57%_50%]"
+          className="object-cover object-center"
         />
-        {/* Carry the white title over a white wall, in the palette's own navy. */}
+        {/* Deepen the sky behind the white title, in the palette's own navy. */}
         <div className="absolute inset-0 bg-[linear-gradient(90deg,rgb(19_40_110/0.8)_0%,rgb(19_40_110/0.42)_32%,rgb(19_40_110/0)_54%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgb(19_40_110/0.35)_0%,transparent_22%,transparent_70%,rgb(13_27_77/0.55)_100%)]" />
 
@@ -108,7 +106,7 @@ export function ProjectHero({ project: p, backHref = "/projects", backLabel = "A
           </p>
         </div>
 
-        {/* Completion ring, wired to her phone */}
+        {/* Completion ring, wired to a home in the tower */}
         <svg
           className="pointer-events-none absolute inset-0 z-[5] hidden h-full w-full xl:block"
           viewBox="0 0 1600 900"
@@ -116,16 +114,16 @@ export function ProjectHero({ project: p, backHref = "/projects", backLabel = "A
           aria-hidden
         >
           <path
-            d={`M ${RING.x * 16} ${RING.y * 9 + 112} C ${RING.x * 16 - 10} ${PHONE.y * 9 - 40}, ${PHONE.x * 16 + 170} ${PHONE.y * 9 - 6}, ${PHONE.x * 16 + 30} ${PHONE.y * 9}`}
+            d={`M ${RING.x * 16} ${RING.y * 9 + 112} C ${RING.x * 16 - 10} ${HOME.y * 9 - 40}, ${HOME.x * 16 + 170} ${HOME.y * 9 - 6}, ${HOME.x * 16 + 14} ${HOME.y * 9}`}
             fill="none"
-            stroke="#111318"
+            stroke="rgb(255 255 255 / 0.85)"
             strokeWidth="1.6"
             strokeDasharray="5 5"
           />
         </svg>
         <span
-          className="pointer-events-none absolute z-[6] hidden h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-[#111318] xl:flex"
-          style={{ left: `${PHONE.x + 1.9}%`, top: `${PHONE.y}%` }}
+          className="pointer-events-none absolute z-[6] hidden h-7 w-7 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white xl:flex"
+          style={{ left: `${HOME.x}%`, top: `${HOME.y}%` }}
           aria-hidden
         >
           <span className="bg-cobalt h-2.5 w-2.5 rounded-full ring-2 ring-white" />
