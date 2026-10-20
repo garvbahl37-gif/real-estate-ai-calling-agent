@@ -20,12 +20,19 @@ const NAV = [
 export function SiteHeader({ current, bare = false }: { current?: string; bare?: boolean }) {
   return (
     <header className={cn("relative z-40", !bare && "bg-canvas rounded-card")}>
-      <div className="flex h-[68px] items-center gap-6 px-5 sm:px-8">
-        <Link href="/" className="flex min-h-11 items-center text-[17px] sm:text-[19px]" aria-label="Aarambh Realty — home">
+      {/* Three columns, not flex with mx-auto: the nav is centred on the bar
+          itself, so it stays put when the right-hand button is hidden (as it is
+          on /call) instead of re-centring into the space left over. */}
+      <div className="grid h-[68px] grid-cols-[1fr_auto] items-center gap-6 px-5 sm:px-8 lg:grid-cols-[1fr_auto_1fr]">
+        <Link
+          href="/"
+          className="flex min-h-11 items-center justify-self-start text-[17px] sm:text-[19px]"
+          aria-label="Aarambh Realty — home"
+        >
           <Wordmark />
         </Link>
 
-        <nav className="mx-auto hidden items-center gap-1 lg:flex" aria-label="Main">
+        <nav className="hidden items-center gap-1 lg:flex" aria-label="Main">
           {NAV.map((item) => {
             const on = current === item.href;
             return (
@@ -38,14 +45,21 @@ export function SiteHeader({ current, bare = false }: { current?: string; bare?:
                   on ? "text-ink font-semibold" : "text-ink-2 hover:text-ink",
                 )}
               >
-                {item.label}
+                {/* Every link is as wide as its bold self, so the active one
+                    getting heavier does not nudge its neighbours. */}
+                <span className="grid">
+                  <span className="invisible col-start-1 row-start-1 font-semibold" aria-hidden>
+                    {item.label}
+                  </span>
+                  <span className="col-start-1 row-start-1">{item.label}</span>
+                </span>
                 {on ? <span className="bg-ink/70 absolute inset-x-3.5 bottom-0.5 h-[2px] rounded-full" /> : null}
               </Link>
             );
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-2 lg:ml-0">
+        <div className="flex items-center gap-2 justify-self-end">
           {/* Redundant on the call page itself, where the primary action is already the hero. */}
           {current !== "/call" ? (
             <Link href="/call" className={cn(btn("soft", "sm"), "max-[400px]:px-3")} aria-label="Talk to Priya">

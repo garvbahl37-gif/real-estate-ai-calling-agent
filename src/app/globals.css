@@ -48,6 +48,10 @@
 html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* Keep room for the scrollbar on short pages too, so moving between a page
+     that scrolls and one that does not cannot slide the whole layout sideways
+     on systems with classic scrollbars. */
+  scrollbar-gutter: stable;
 }
 
 body {
